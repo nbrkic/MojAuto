@@ -21,5 +21,14 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
       date TEXT NOT NULL,
       note TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS reminders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+      title TEXT NOT NULL,
+      due_date TEXT NOT NULL,
+      is_done INTEGER NOT NULL DEFAULT 0,
+      notification_id TEXT
+    );
   `);
 }
