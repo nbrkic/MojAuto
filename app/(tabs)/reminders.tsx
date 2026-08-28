@@ -3,7 +3,14 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+    Alert,
+    FlatList,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 
 type ReminderRow = {
   id: number;
@@ -20,7 +27,7 @@ export default function RemindersScreen() {
 
   const load = useCallback(() => {
     db.getAllAsync<ReminderRow>(
-      `SELECT reminders.id, reminders.title, reminders.due_date, reminders.notification_id, 
+      `SELECT reminders.id, reminders.title, reminders.due_date, reminders.notification_id,
               vehicles.make || ' ' || vehicles.model AS vehicle_name
        FROM reminders
        JOIN vehicles ON vehicles.id = reminders.vehicle_id
@@ -39,6 +46,23 @@ export default function RemindersScreen() {
     }
     await db.runAsync("UPDATE reminders SET is_done = 1 WHERE id = ?", id);
     load();
+  }
+
+  function deleteReminder(id: number, notificationId: string | null) {
+    Alert.alert("Obriši podsetnik?", "Ova radnja se ne može poništiti.", [
+      { text: "Otkaži", style: "cancel" },
+      {
+        text: "Obriši",
+        style: "destructive",
+        onPress: async () => {
+          if (notificationId) {
+            await cancelReminderNotification(notificationId);
+          }
+          await db.runAsync("DELETE FROM reminders WHERE id = ?", id);
+          load();
+        },
+      },
+    ]);
   }
 
   return (
@@ -62,18 +86,23 @@ export default function RemindersScreen() {
           renderItem={({ item }) => {
             const overdue = item.due_date < today;
             return (
-              <Pressable
-                style={styles.row}
-                onPress={() => markDone(item.id, item.notification_id)}
-              >
-                <View>
+              <View style={styles.row}>
+                <Pressable
+                  style={styles.rowInfo}
+                  onPress={() => markDone(item.id, item.notification_id)}
+                >
                   <Text style={styles.reminderTitle}>{item.title}</Text>
                   <Text style={styles.meta}>{item.vehicle_name}</Text>
-                </View>
+                </Pressable>
                 <Text style={[styles.date, overdue && styles.overdue]}>
                   {overdue ? "Isteklo" : item.due_date}
                 </Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => deleteReminder(item.id, item.notification_id)}
+                >
+                  <Text style={styles.deleteText}>Obriši</Text>
+                </Pressable>
+              </View>
             );
           }}
         />
@@ -108,8 +137,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#ccc",
   },
+  rowInfo: { flex: 1 },
   reminderTitle: { fontSize: 16, fontWeight: "600" },
   meta: { fontSize: 13, color: "#666", marginTop: 2 },
-  date: { fontSize: 14, color: "#666" },
+  date: { fontSize: 14, color: "#666", marginRight: 12 },
   overdue: { color: "#D64545", fontWeight: "700" },
+  deleteText: { color: "#D64545", fontSize: 14, fontWeight: "600" },
 });
