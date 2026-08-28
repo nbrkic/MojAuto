@@ -24,8 +24,12 @@ export default function RootLayout() {
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
-            name="modal"
-            options={{ presentation: "modal", title: "Modal" }}
+            name="add-vehicle"
+            options={{ presentation: "modal", title: "Dodaj vozilo" }}
+          />
+          <Stack.Screen
+            name="add-expense"
+            options={{ presentation: "modal", title: "Dodaj trošak" }}
           />
         </Stack>
       </SQLiteProvider>

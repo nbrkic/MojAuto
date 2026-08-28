@@ -30,7 +30,10 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>MojAuto</Text>
 
-      <Pressable style={styles.addButton} onPress={() => router.push("/modal")}>
+      <Pressable
+        style={styles.addButton}
+        onPress={() => router.push("/add-vehicle")}
+      >
         <Text style={styles.addButtonText}>+ Dodaj vozilo</Text>
       </Pressable>
 
