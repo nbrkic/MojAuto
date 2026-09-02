@@ -1,15 +1,25 @@
+import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { TextField } from "@/components/ui/text-field";
+import { useToast } from "@/components/ui/toast";
+import { Colors, Spacing, Typography } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { useState } from "react";
 import {
-    Alert,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
+  const showToast = useToast();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
@@ -21,94 +31,96 @@ export default function LoginScreen() {
     setLoading(true);
     const { error } = isRegistering
       ? await supabase.auth.signUp({ email: email.trim(), password })
-      : await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
+      : await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
 
     if (error) {
-      Alert.alert("Greška", error.message);
+      showToast(error.message, "error");
       return;
     }
 
     if (isRegistering) {
-      Alert.alert("Uspešno", "Proveri email za potvrdu naloga, pa se uloguj.");
+      showToast("Proveri email za potvrdu naloga, pa se uloguj.");
     }
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>MojAuto</Text>
-      <Text style={styles.subtitle}>
-        {isRegistering ? "Napravi nalog" : "Uloguj se"}
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Lozinka (min 6 karaktera)"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-
-      <Pressable
-        style={[
-          styles.button,
-          (!canSubmit || loading) && styles.buttonDisabled,
-        ]}
-        disabled={!canSubmit || loading}
-        onPress={handleSubmit}
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + Spacing.xxxl }]}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.buttonText}>
-          {loading ? "..." : isRegistering ? "Registruj se" : "Uloguj se"}
-        </Text>
-      </Pressable>
+        <View style={styles.brand}>
+          <View style={styles.brandMark}>
+            <Icon name="car-sports" size={30} color={Colors.accent} />
+          </View>
+          <Text style={styles.brandTitle}>MojAuto</Text>
+          <View style={styles.brandRule} />
+          <Text style={styles.brandSubtitle}>
+            {isRegistering ? "Napravi nalog za svoje vozilo" : "Sve o tvom automobilu, na jednom mestu"}
+          </Text>
+        </View>
 
-      <Pressable onPress={() => setIsRegistering((v) => !v)}>
-        <Text style={styles.switchText}>
-          {isRegistering
-            ? "Već imaš nalog? Uloguj se"
-            : "Nemaš nalog? Registruj se"}
-        </Text>
-      </Pressable>
-    </View>
+        <View style={styles.form}>
+          <TextField
+            label="Email"
+            placeholder="ime@primer.com"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <TextField
+            label="Lozinka"
+            placeholder="Minimum 6 karaktera"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          <Button
+            title={isRegistering ? "Registruj se" : "Uloguj se"}
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+            loading={loading}
+            style={{ marginTop: Spacing.sm }}
+          />
+
+          <Pressable onPress={() => setIsRegistering((v) => !v)} style={styles.switchButton}>
+            <Text style={styles.switchText}>
+              {isRegistering ? "Već imaš nalog? " : "Nemaš nalog? "}
+              <Text style={styles.switchTextAccent}>{isRegistering ? "Uloguj se" : "Registruj se"}</Text>
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
-  title: { fontSize: 32, fontWeight: "bold", textAlign: "center" },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: "#208AEF",
-    borderRadius: 8,
-    paddingVertical: 14,
+  container: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: Spacing.xxl, paddingBottom: Spacing.xxxl },
+  brand: { alignItems: "center", marginBottom: Spacing.xxxl },
+  brandMark: {
+    width: 64,
+    height: 64,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.lineStrong,
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
   },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  switchText: { color: "#208AEF", textAlign: "center", marginTop: 16 },
+  brandTitle: { ...Typography.display, color: Colors.textPrimary },
+  brandRule: { width: 40, height: 2, backgroundColor: Colors.accent, marginTop: Spacing.md },
+  brandSubtitle: {
+    ...Typography.body,
+    color: Colors.textSecondary,
+    marginTop: Spacing.lg,
+    textAlign: "center",
+  },
+  form: { width: "100%" },
+  switchButton: { marginTop: Spacing.xl, alignItems: "center" },
+  switchText: { ...Typography.body, color: Colors.textSecondary },
+  switchTextAccent: { color: Colors.accent, fontFamily: Typography.bodyMedium.fontFamily },
 });

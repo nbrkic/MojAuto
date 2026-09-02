@@ -1,23 +1,40 @@
-import { scheduleReminderNotification } from "@/notifications/reminders";
+import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Icon } from "@/components/ui/icon";
+import { SelectField } from "@/components/ui/select-field";
+import { TextField } from "@/components/ui/text-field";
+import { useToast } from "@/components/ui/toast";
+import { Colors, Spacing, Typography } from "@/constants/theme";
+import { toDateKey } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { Picker } from "@react-native-picker/picker";
+import { scheduleReminderNotification } from "@/notifications/reminders";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type Vehicle = {
-  id: number;
-  make: string;
-  model: string;
-};
+type Vehicle = { id: number; make: string; model: string };
 
 export default function AddReminderScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const showToast = useToast();
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiclesLoaded, setVehiclesLoaded] = useState(false);
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(new Date());
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     supabase
@@ -26,110 +43,107 @@ export default function AddReminderScreen() {
       .order("id", { ascending: false })
       .then(({ data, error }) => {
         if (error) {
-          Alert.alert("Greška", error.message);
+          showToast(error.message, "error");
+          setVehiclesLoaded(true);
           return;
         }
         setVehicles(data ?? []);
         if (data && data.length > 0) setVehicleId(data[0].id);
+        setVehiclesLoaded(true);
       });
-  }, []);
+  }, [showToast]);
 
-  const canSave =
-    vehicleId !== null &&
-    title.trim() !== "" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim());
+  const canSave = vehicleId !== null && title.trim() !== "";
 
   async function handleSave() {
+    setSaving(true);
     const vehicle = vehicles.find((v) => v.id === vehicleId);
+    const dueDateKey = toDateKey(dueDate);
     const notificationId = await scheduleReminderNotification(
       title.trim(),
       vehicle ? `${vehicle.make} ${vehicle.model}` : "",
-      dueDate.trim(),
+      dueDateKey,
     );
 
     const { error } = await supabase.from("reminders").insert({
       vehicle_id: vehicleId,
       title: title.trim(),
-      due_date: dueDate.trim(),
+      due_date: dueDateKey,
       notification_id: notificationId,
     });
 
+    setSaving(false);
     if (error) {
-      Alert.alert("Greška", error.message);
+      showToast(error.message, "error");
       return;
     }
+    showToast("Podsetnik sačuvan");
     router.back();
   }
 
-  if (vehicles.length === 0) {
+  if (vehiclesLoaded && vehicles.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Prvo dodaj vozilo</Text>
-        <Text style={styles.subtitle}>
-          Podsetnik mora biti vezan za neko vozilo.
-        </Text>
+        <View style={[styles.header, { marginTop: insets.top + Spacing.md }]}>
+          <Text style={styles.title}>Dodaj podsetnik</Text>
+          <Pressable onPress={() => router.back()} hitSlop={8}>
+            <Icon name="close" size={24} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
+        <EmptyState
+          icon="car-side"
+          title="Prvo dodaj vozilo"
+          subtitle="Podsetnik mora biti vezan za neko vozilo."
+        />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Dodaj podsetnik</Text>
-
-      <Text style={styles.label}>Vozilo</Text>
-      <Picker
-        selectedValue={vehicleId}
-        onValueChange={(value) => setVehicleId(value)}
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + Spacing.md, paddingBottom: Spacing.xxxl }}
+        keyboardShouldPersistTaps="handled"
       >
-        {vehicles.map((v) => (
-          <Picker.Item key={v.id} label={`${v.make} ${v.model}`} value={v.id} />
-        ))}
-      </Picker>
+        <View style={styles.header}>
+          <Text style={styles.title}>Dodaj podsetnik</Text>
+          <Pressable onPress={() => router.back()} hitSlop={8}>
+            <Icon name="close" size={24} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Šta treba uraditi (npr. Zamena ulja)"
-        value={title}
-        onChangeText={setTitle}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Datum (GGGG-MM-DD, npr. 2026-10-15)"
-        value={dueDate}
-        onChangeText={setDueDate}
-      />
+        <View style={styles.form}>
+          <SelectField
+            label="Vozilo"
+            placeholder="Izaberi vozilo"
+            value={vehicleId}
+            onChange={setVehicleId}
+            options={vehicles.map((v) => ({ value: v.id, label: `${v.make} ${v.model}`, icon: "car-side" as const }))}
+          />
+          <TextField
+            label="Šta treba uraditi"
+            placeholder="npr. Zamena ulja"
+            value={title}
+            onChangeText={setTitle}
+          />
+          <DateField label="Datum" value={dueDate} onChange={setDueDate} />
 
-      <Pressable
-        style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
-        disabled={!canSave}
-        onPress={handleSave}
-      >
-        <Text style={styles.saveButtonText}>Sačuvaj</Text>
-      </Pressable>
-    </View>
+          <Button title="Sačuvaj" onPress={handleSave} disabled={!canSave} loading={saving} />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, gap: 12 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 8 },
-  subtitle: { fontSize: 16, color: "#666" },
-  label: { fontSize: 14, color: "#666", marginTop: 4 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  saveButton: {
-    backgroundColor: "#208AEF",
-    borderRadius: 8,
-    paddingVertical: 14,
+  container: { flex: 1, backgroundColor: Colors.background },
+  header: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.xl,
   },
-  saveButtonDisabled: { opacity: 0.5 },
-  saveButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  title: { ...Typography.h2, color: Colors.textPrimary },
+  form: { paddingHorizontal: Spacing.xl },
 });

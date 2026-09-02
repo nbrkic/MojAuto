@@ -1,17 +1,26 @@
+import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { TextField } from "@/components/ui/text-field";
+import { useToast } from "@/components/ui/toast";
+import { Colors, Spacing, Typography } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function AddVehicleScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const showToast = useToast();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const editingId = id ? Number(id) : null;
 
@@ -20,6 +29,7 @@ export default function AddVehicleScreen() {
   const [year, setYear] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [mileage, setMileage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (editingId === null) return;
@@ -38,10 +48,10 @@ export default function AddVehicleScreen() {
       });
   }, [editingId]);
 
-  const canSave =
-    make.trim() !== "" && model.trim() !== "" && year.trim() !== "";
+  const canSave = make.trim() !== "" && model.trim() !== "" && year.trim() !== "";
 
   async function handleSave() {
+    setSaving(true);
     const payload = {
       make: make.trim(),
       model: model.trim(),
@@ -55,86 +65,82 @@ export default function AddVehicleScreen() {
         ? await supabase.from("vehicles").update(payload).eq("id", editingId)
         : await supabase.from("vehicles").insert(payload);
 
+    setSaving(false);
     if (error) {
-      Alert.alert("Greška", error.message);
+      showToast(error.message, "error");
       return;
     }
+    showToast(editingId !== null ? "Vozilo izmenjeno" : "Vozilo dodato");
     router.back();
   }
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: editingId !== null ? "Izmeni vozilo" : "Dodaj vozilo",
-        }}
-      />
-      <Text style={styles.title}>
-        {editingId !== null ? "Izmeni vozilo" : "Dodaj vozilo"}
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Marka (npr. Volkswagen)"
-        value={make}
-        onChangeText={setMake}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Model (npr. Golf)"
-        value={model}
-        onChangeText={setModel}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Godište"
-        value={year}
-        onChangeText={setYear}
-        keyboardType="number-pad"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Registracija (opciono)"
-        value={licensePlate}
-        onChangeText={setLicensePlate}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Kilometraža (opciono)"
-        value={mileage}
-        onChangeText={setMileage}
-        keyboardType="number-pad"
-      />
-
-      <Pressable
-        style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
-        disabled={!canSave}
-        onPress={handleSave}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + Spacing.md, paddingBottom: Spacing.xxxl }}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.saveButtonText}>Sačuvaj</Text>
-      </Pressable>
-    </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>{editingId !== null ? "Izmeni vozilo" : "Dodaj vozilo"}</Text>
+          <Pressable onPress={() => router.back()} hitSlop={8}>
+            <Icon name="close" size={24} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.form}>
+          <TextField
+            label="Marka"
+            placeholder="npr. Volkswagen"
+            value={make}
+            onChangeText={setMake}
+          />
+          <TextField
+            label="Model"
+            placeholder="npr. Golf"
+            value={model}
+            onChangeText={setModel}
+          />
+          <TextField
+            label="Godište"
+            placeholder="npr. 2018"
+            value={year}
+            onChangeText={setYear}
+            keyboardType="number-pad"
+          />
+          <TextField
+            label="Registracija (opciono)"
+            placeholder="npr. BG-123-AB"
+            value={licensePlate}
+            onChangeText={setLicensePlate}
+            autoCapitalize="characters"
+          />
+          <TextField
+            label="Kilometraža (opciono)"
+            placeholder="npr. 142350"
+            value={mileage}
+            onChangeText={setMileage}
+            keyboardType="number-pad"
+          />
+
+          <Button title="Sačuvaj" onPress={handleSave} disabled={!canSave} loading={saving} />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, gap: 12 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 8 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  saveButton: {
-    backgroundColor: "#208AEF",
-    borderRadius: 8,
-    paddingVertical: 14,
+  container: { flex: 1, backgroundColor: Colors.background },
+  header: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.xl,
   },
-  saveButtonDisabled: { opacity: 0.5 },
-  saveButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  title: { ...Typography.h2, color: Colors.textPrimary },
+  form: { paddingHorizontal: Spacing.xl },
 });
