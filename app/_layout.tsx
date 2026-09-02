@@ -22,6 +22,7 @@ import { ThemeProvider, type Theme } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import "react-native-reanimated";
@@ -29,6 +30,10 @@ import "react-native-reanimated";
 export const unstable_settings = {
   anchor: "(tabs)",
 };
+
+// Root native window background — prevents a white flash during screen
+// transitions before React Native's own view tree paints on top of it.
+SystemUI.setBackgroundColorAsync(Colors.background);
 
 const navigationTheme: Theme = {
   dark: true,
@@ -61,18 +66,24 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={navigationTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.background },
+        }}
+      >
         <Stack.Protected guard={!!session}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="vehicle/[id]" />
-          <Stack.Screen name="stats" />
           <Stack.Screen name="add-vehicle" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-expense" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-reminder" options={{ presentation: "modal" }} />
+          <Stack.Screen name="vehicle-specs" options={{ presentation: "modal" }} />
         </Stack.Protected>
 
         <Stack.Protected guard={!session}>
           <Stack.Screen name="login" />
+          <Stack.Screen name="register" />
         </Stack.Protected>
       </Stack>
       <StatusBar style="light" />

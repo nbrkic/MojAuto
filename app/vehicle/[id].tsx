@@ -2,16 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CutCornerCard } from "@/components/ui/cut-corner-card";
 import { Icon } from "@/components/ui/icon";
-import { ReadoutStrip, type ReadoutItem } from "@/components/ui/readout-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { getCategory } from "@/constants/categories";
-import { Colors, Spacing, Typography } from "@/constants/theme";
-import { daysUntil, formatDateNumericSr, formatNumberSr, formatRSD } from "@/lib/format";
+import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
+import { formatEUR, formatNumberSr } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,10 +21,24 @@ type Vehicle = {
   year: number;
   license_plate: string | null;
   mileage: number;
+  fuel_type: string | null;
+  power_kw: number | null;
+  transmission: string | null;
+  drivetrain: string | null;
+  photo_url: string | null;
+  vin: string | null;
+  engine_displacement_cc: number | null;
+  cylinder_count: number | null;
+  valve_count: number | null;
+  has_turbo: boolean | null;
+  gear_count: number | null;
+  tank_capacity_l: number | null;
+  purchase_price_eur: number | null;
+  tire_size: string | null;
+  tire_brand: string | null;
+  rim_size: string | null;
+  rim_material: string | null;
 };
-
-type ExpenseRow = { id: number; category: string; amount: number; date: string; note: string | null };
-type ReminderRow = { id: number; title: string; due_date: string };
 
 export default function VehicleDetailScreen() {
   const router = useRouter();
@@ -36,39 +49,28 @@ export default function VehicleDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
-  const [reminders, setReminders] = useState<ReminderRow[]>([]);
+  const loadedVehicleIdRef = useRef<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setLoading(true);
-      Promise.all([
-        supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
-        supabase
-          .from("expenses")
-          .select("id, category, amount, date, note")
-          .eq("vehicle_id", vehicleId)
-          .order("date", { ascending: false }),
-        supabase
-          .from("reminders")
-          .select("id, title, due_date")
-          .eq("vehicle_id", vehicleId)
-          .eq("is_done", false)
-          .order("due_date", { ascending: true })
-          .limit(5),
-      ]).then(([vehicleRes, expenseRes, reminderRes]) => {
-        if (!active) return;
-        if (vehicleRes.error || !vehicleRes.data) {
-          showToast("Vozilo nije pronađeno", "error");
-          router.back();
-          return;
-        }
-        setVehicle(vehicleRes.data);
-        setExpenses(expenseRes.data ?? []);
-        setReminders(reminderRes.data ?? []);
-        setLoading(false);
-      });
+      if (loadedVehicleIdRef.current !== vehicleId) setLoading(true);
+      supabase
+        .from("vehicles")
+        .select("*")
+        .eq("id", vehicleId)
+        .single()
+        .then(({ data, error }) => {
+          if (!active) return;
+          if (error || !data) {
+            showToast("Vozilo nije pronađeno", "error");
+            router.back();
+            return;
+          }
+          loadedVehicleIdRef.current = vehicleId;
+          setVehicle(data);
+          setLoading(false);
+        });
       return () => {
         active = false;
       };
@@ -94,14 +96,26 @@ export default function VehicleDetailScreen() {
     ]);
   }
 
-  const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const avgMonthly = totalSpent / 6;
-
-  const statItems: ReadoutItem[] = [
-    { key: "total", label: "Ukupno", value: formatRSD(totalSpent), tone: "accent" },
-    { key: "avg", label: "Mesečno", value: formatRSD(avgMonthly) },
-    { key: "count", label: "Troškova", value: String(expenses.length) },
-  ];
+  const specs = vehicle
+    ? [
+        { label: "Gorivo", value: vehicle.fuel_type },
+        { label: "Snaga", value: vehicle.power_kw ? `${vehicle.power_kw} kW` : null },
+        { label: "Menjač", value: vehicle.transmission },
+        { label: "Pogon", value: vehicle.drivetrain },
+        { label: "Zapremina motora", value: vehicle.engine_displacement_cc ? `${vehicle.engine_displacement_cc} cm³` : null },
+        { label: "Broj cilindara", value: vehicle.cylinder_count ? String(vehicle.cylinder_count) : null },
+        { label: "Broj ventila", value: vehicle.valve_count ? String(vehicle.valve_count) : null },
+        { label: "Turbo", value: vehicle.has_turbo === null ? null : vehicle.has_turbo ? "Da" : "Ne" },
+        { label: "Broj brzina", value: vehicle.gear_count ? String(vehicle.gear_count) : null },
+        { label: "Kapacitet rezervoara", value: vehicle.tank_capacity_l ? `${vehicle.tank_capacity_l} l` : null },
+        { label: "Dimenzija guma", value: vehicle.tire_size },
+        { label: "Proizvođač guma", value: vehicle.tire_brand },
+        { label: "Dimenzija felni", value: vehicle.rim_size },
+        { label: "Materijal felni", value: vehicle.rim_material },
+        { label: "VIN / broj šasije", value: vehicle.vin },
+        { label: "Kupovna cena", value: vehicle.purchase_price_eur ? formatEUR(vehicle.purchase_price_eur) : null },
+      ].filter((s): s is { label: string; value: string } => !!s.value)
+    : [];
 
   return (
     <ScrollView
@@ -128,6 +142,12 @@ export default function VehicleDetailScreen() {
         </View>
       ) : (
         <>
+          {vehicle.photo_url && (
+            <View style={styles.section}>
+              <Image source={{ uri: vehicle.photo_url }} style={styles.photo} contentFit="cover" />
+            </View>
+          )}
+
           <View style={styles.section}>
             <CutCornerCard>
               <Text style={styles.heroEyebrow}>Podaci o vozilu</Text>
@@ -147,53 +167,34 @@ export default function VehicleDetailScreen() {
             </CutCornerCard>
           </View>
 
-          <View style={styles.section}>
-            <ReadoutStrip items={statItems} />
-          </View>
-
-          {reminders.length > 0 && (
+          {specs.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Predstoji</Text>
-              <View style={{ gap: Spacing.sm }}>
-                {reminders.map((r) => {
-                  const days = daysUntil(r.due_date);
-                  const overdue = days < 0;
-                  return (
-                    <Card key={r.id} style={styles.listRow}>
-                      <Text style={styles.listRowTitle} numberOfLines={1}>{r.title}</Text>
-                      <Text style={[styles.listRowMeta, overdue && { color: Colors.danger }]}>
-                        {overdue ? "Isteklo" : formatDateNumericSr(r.due_date)}
-                      </Text>
-                    </Card>
-                  );
-                })}
-              </View>
+              <Text style={styles.sectionTitle}>Specifikacije</Text>
+              <Card padded={false}>
+                {specs.map((spec, index) => (
+                  <View
+                    key={spec.label}
+                    style={[styles.specRow, index < specs.length - 1 && styles.specRowDivider]}
+                  >
+                    <Text style={styles.specLabel}>{spec.label}</Text>
+                    <Text style={styles.specValue}>{spec.value}</Text>
+                  </View>
+                ))}
+              </Card>
             </View>
           )}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Nedavni troškovi</Text>
-            {expenses.length === 0 ? (
-              <Card>
-                <Text style={styles.listRowMeta}>Još nema troškova za ovo vozilo.</Text>
-              </Card>
-            ) : (
-              <View style={{ gap: Spacing.sm }}>
-                {expenses.slice(0, 6).map((e) => {
-                  const cat = getCategory(e.category);
-                  return (
-                    <Card key={e.id} style={[styles.expenseRow, { borderLeftWidth: 2, borderLeftColor: cat.color }]}>
-                      <Icon name={cat.icon} size={16} color={cat.color} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.listRowTitle} numberOfLines={1}>{e.note?.trim() || cat.label}</Text>
-                        <Text style={styles.listRowMeta}>{formatDateNumericSr(e.date)}</Text>
-                      </View>
-                      <Text style={styles.listRowTitle}>{formatRSD(e.amount)}</Text>
-                    </Card>
-                  );
-                })}
-              </View>
-            )}
+            <Card
+              onPress={() => router.push({ pathname: "/vehicle-specs", params: { id: String(vehicleId) } })}
+              style={styles.linkCard}
+            >
+              <Icon name="tune" size={18} color={Colors.accent} />
+              <Text style={styles.linkText}>
+                {specs.length > 0 ? "Uredi detaljne specifikacije" : "Dodaj detaljne specifikacije"}
+              </Text>
+              <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
+            </Card>
           </View>
 
           <View style={styles.section}>
@@ -217,6 +218,29 @@ const styles = StyleSheet.create({
   headerButton: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
   headerTitle: { ...Typography.h3, color: Colors.textPrimary, flex: 1, textAlign: "center" },
   section: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
+  photo: {
+    width: "100%",
+    height: 200,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.line,
+    backgroundColor: Colors.surface,
+  },
+  specRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
+  specRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.line,
+  },
+  specLabel: { ...Typography.body, color: Colors.textSecondary },
+  specValue: { ...Typography.bodyMedium, color: Colors.textPrimary },
+  linkCard: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
+  linkText: { ...Typography.bodyMedium, color: Colors.textPrimary, flex: 1 },
   heroEyebrow: { ...Typography.eyebrow, color: Colors.textTertiary, marginBottom: 6 },
   heroName: { ...Typography.h1, color: Colors.textPrimary },
   heroMeta: { ...Typography.caption, color: Colors.textSecondary, marginTop: 4 },
@@ -237,8 +261,4 @@ const styles = StyleSheet.create({
   },
   plateText: { ...Typography.tag, color: Colors.accentBright, letterSpacing: 1 },
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: Spacing.md },
-  listRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  listRowTitle: { ...Typography.bodyMedium, color: Colors.textPrimary, flex: 1 },
-  listRowMeta: { ...Typography.caption, color: Colors.textSecondary },
-  expenseRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
 });

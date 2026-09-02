@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const ROUTE_META: Record<string, { label: string; icon: IconName; activeIcon: IconName }> = {
   index: { label: "Početna", icon: "view-dashboard-outline", activeIcon: "view-dashboard" },
   expenses: { label: "Troškovi", icon: "credit-card-outline", activeIcon: "credit-card" },
-  reminders: { label: "Servis", icon: "wrench-outline", activeIcon: "wrench" },
+  reminders: { label: "Obaveze", icon: "clipboard-check-outline", activeIcon: "clipboard-check" },
   documents: { label: "Dokumenti", icon: "folder-outline", activeIcon: "folder" },
   profile: { label: "Profil", icon: "account-circle-outline", activeIcon: "account-circle" },
 };

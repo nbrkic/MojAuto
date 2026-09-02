@@ -3,8 +3,10 @@ import { DateField } from "@/components/ui/date-field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { SelectField } from "@/components/ui/select-field";
+import { SwitchRow } from "@/components/ui/switch-row";
 import { TextField } from "@/components/ui/text-field";
 import { useToast } from "@/components/ui/toast";
+import { NOTIFY_DAYS_BEFORE_OPTIONS } from "@/constants/reminder-options";
 import { Colors, Spacing, Typography } from "@/constants/theme";
 import { toDateKey } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
@@ -34,6 +36,8 @@ export default function AddReminderScreen() {
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState(new Date());
+  const [notifyEnabled, setNotifyEnabled] = useState(true);
+  const [notifyDaysBefore, setNotifyDaysBefore] = useState<number | null>(3);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -59,11 +63,14 @@ export default function AddReminderScreen() {
     setSaving(true);
     const vehicle = vehicles.find((v) => v.id === vehicleId);
     const dueDateKey = toDateKey(dueDate);
-    const notificationId = await scheduleReminderNotification(
-      title.trim(),
-      vehicle ? `${vehicle.make} ${vehicle.model}` : "",
-      dueDateKey,
-    );
+    const notificationId = notifyEnabled
+      ? await scheduleReminderNotification(
+          title.trim(),
+          vehicle ? `${vehicle.make} ${vehicle.model}` : "",
+          dueDateKey,
+          notifyDaysBefore ?? 0,
+        )
+      : null;
 
     const { error } = await supabase.from("reminders").insert({
       vehicle_id: vehicleId,
@@ -100,7 +107,7 @@ export default function AddReminderScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + Spacing.md, paddingBottom: Spacing.xxxl }}
         keyboardShouldPersistTaps="handled"
@@ -127,6 +134,22 @@ export default function AddReminderScreen() {
             onChangeText={setTitle}
           />
           <DateField label="Datum" value={dueDate} onChange={setDueDate} />
+
+          <SwitchRow
+            label="Pošalji obaveštenje"
+            description="Dobićeš podsetnik u aplikaciji pre roka."
+            value={notifyEnabled}
+            onChange={setNotifyEnabled}
+          />
+          {notifyEnabled && (
+            <SelectField
+              label="Kada da te obavestimo"
+              placeholder="Izaberi"
+              value={notifyDaysBefore}
+              onChange={setNotifyDaysBefore}
+              options={NOTIFY_DAYS_BEFORE_OPTIONS}
+            />
+          )}
 
           <Button title="Sačuvaj" onPress={handleSave} disabled={!canSave} loading={saving} />
         </View>

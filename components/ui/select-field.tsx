@@ -1,7 +1,8 @@
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { TextField } from "@/components/ui/text-field";
 import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export type SelectOption<T extends string | number> = {
@@ -18,6 +19,8 @@ type SelectFieldProps<T extends string | number> = {
   options: SelectOption<T>[];
   onChange: (value: T) => void;
   sheetTitle?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
 };
 
 export function SelectField<T extends string | number>({
@@ -27,9 +30,23 @@ export function SelectField<T extends string | number>({
   options,
   onChange,
   sheetTitle,
+  searchable,
+  searchPlaceholder = "Pretraži...",
 }: SelectFieldProps<T>) {
   const [visible, setVisible] = useState(false);
+  const [query, setQuery] = useState("");
   const selected = options.find((o) => o.value === value) ?? null;
+
+  const filteredOptions = useMemo(() => {
+    if (!searchable || query.trim() === "") return options;
+    const q = query.trim().toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query, searchable]);
+
+  function close() {
+    setVisible(false);
+    setQuery("");
+  }
 
   return (
     <View style={styles.container}>
@@ -37,29 +54,49 @@ export function SelectField<T extends string | number>({
       <Pressable onPress={() => setVisible(true)} style={styles.field}>
         <View style={styles.fieldContent}>
           {selected?.icon && <Icon name={selected.icon} size={18} color={selected.color ?? Colors.textPrimary} />}
-          <Text style={[styles.value, !selected && styles.placeholder]} numberOfLines={1}>
-            {selected?.label ?? placeholder}
+          <Text style={[styles.value, !selected && !value && styles.placeholder]} numberOfLines={1}>
+            {selected?.label ?? (value !== null && value !== "" ? String(value) : placeholder)}
           </Text>
         </View>
         <Icon name="chevron-down" size={20} color={Colors.textSecondary} />
       </Pressable>
 
-      <BottomSheet visible={visible} onClose={() => setVisible(false)} title={sheetTitle ?? label}>
+      <BottomSheet
+        visible={visible}
+        onClose={close}
+        title={sheetTitle ?? label}
+        fixedHeight={searchable}
+        header={
+          searchable && (
+            <TextField
+              placeholder={searchPlaceholder}
+              value={query}
+              onChangeText={setQuery}
+              rightIcon="magnify"
+              autoFocus
+            />
+          )
+        }
+      >
         <View style={{ gap: Spacing.sm, paddingBottom: Spacing.lg }}>
-          {options.map((option) => (
-            <Pressable
-              key={option.value}
-              onPress={() => {
-                onChange(option.value);
-                setVisible(false);
-              }}
-              style={styles.optionRow}
-            >
-              {option.icon && <Icon name={option.icon} size={18} color={option.color ?? Colors.textSecondary} />}
-              <Text style={styles.optionLabel}>{option.label}</Text>
-              {option.value === value && <Icon name="check" size={18} color={Colors.accentBright} />}
-            </Pressable>
-          ))}
+          {filteredOptions.length === 0 ? (
+            <Text style={styles.noResults}>Nema rezultata.</Text>
+          ) : (
+            filteredOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                onPress={() => {
+                  onChange(option.value);
+                  close();
+                }}
+                style={styles.optionRow}
+              >
+                {option.icon && <Icon name={option.icon} size={18} color={option.color ?? Colors.textSecondary} />}
+                <Text style={styles.optionLabel}>{option.label}</Text>
+                {option.value === value && <Icon name="check" size={18} color={Colors.accentBright} />}
+              </Pressable>
+            ))
+          )}
         </View>
       </BottomSheet>
     </View>
@@ -85,4 +122,5 @@ const styles = StyleSheet.create({
   placeholder: { color: Colors.textTertiary },
   optionRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.md },
   optionLabel: { ...Typography.bodyMedium, color: Colors.textPrimary, flex: 1 },
+  noResults: { ...Typography.body, color: Colors.textSecondary, paddingVertical: Spacing.lg },
 });

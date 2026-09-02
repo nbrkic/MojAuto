@@ -39,7 +39,15 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Aplikaciji je potrebna dozvola da pristupi galeriji da bi izabrao fotografiju vozila.",
+          "cameraPermission": "Aplikaciji je potrebna dozvola da pristupi kameri da bi uslikao vozilo.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

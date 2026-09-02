@@ -1,18 +1,22 @@
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CutCornerCard } from "@/components/ui/cut-corner-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { ReadoutStrip, type ReadoutItem } from "@/components/ui/readout-strip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Colors, Spacing, Typography } from "@/constants/theme";
+import { TextField } from "@/components/ui/text-field";
+import { useToast } from "@/components/ui/toast";
+import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
 import { daysUntil, formatNumberSr, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,6 +29,8 @@ type Vehicle = {
   year: number;
   license_plate: string | null;
   mileage: number;
+  photo_url: string | null;
+  avg_consumption_l100km: number | null;
 };
 
 type ReminderRow = { id: number; title: string; due_date: string };
@@ -40,22 +46,66 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
+  const showToast = useToast();
+  const displayName =
+    session?.user?.user_metadata?.first_name || session?.user?.email?.split("@")[0] || "";
 
   const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [switcherVisible, setSwitcherVisible] = useState(false);
+  const [mileageSheetVisible, setMileageSheetVisible] = useState(false);
+  const [mileageInput, setMileageInput] = useState("");
+  const [savingMileage, setSavingMileage] = useState(false);
+  const [consumptionSheetVisible, setConsumptionSheetVisible] = useState(false);
+  const [consumptionInput, setConsumptionInput] = useState("");
+  const [savingConsumption, setSavingConsumption] = useState(false);
 
   const [monthTotal, setMonthTotal] = useState(0);
   const [fuelTotal, setFuelTotal] = useState(0);
   const [serviceTotal, setServiceTotal] = useState(0);
   const [otherTotal, setOtherTotal] = useState(0);
   const [upcoming, setUpcoming] = useState<ReminderRow[]>([]);
+  const hasLoadedRef = useRef(false);
+
+  const loadVehicleStats = useCallback(async (activeId: number) => {
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    const [{ data: expenseData }, { data: reminderData }] = await Promise.all([
+      supabase
+        .from("expenses")
+        .select("category, amount, date")
+        .eq("vehicle_id", activeId)
+        .gte("date", `${monthPrefix}-01`),
+      supabase
+        .from("reminders")
+        .select("id, title, due_date")
+        .eq("vehicle_id", activeId)
+        .eq("is_done", false)
+        .order("due_date", { ascending: true })
+        .limit(4),
+    ]);
+
+    let fuel = 0;
+    let service = 0;
+    let other = 0;
+    for (const e of expenseData ?? []) {
+      if (e.category === "Gorivo") fuel += e.amount;
+      else if (e.category === "Servis") service += e.amount;
+      else other += e.amount;
+    }
+    setFuelTotal(fuel);
+    setServiceTotal(service);
+    setOtherTotal(other);
+    setMonthTotal(fuel + service + other);
+    setUpcoming(reminderData ?? []);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setLoading(true);
+      if (!hasLoadedRef.current) setLoading(true);
 
       (async () => {
         const [{ data: vehicleData }, storedId] = await Promise.all([
@@ -75,55 +125,94 @@ export default function HomeScreen() {
         setSelectedId(activeId);
 
         if (!activeId) {
+          hasLoadedRef.current = true;
           setLoading(false);
           return;
         }
 
-        const now = new Date();
-        const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-        const [{ data: expenseData }, { data: reminderData }] = await Promise.all([
-          supabase
-            .from("expenses")
-            .select("category, amount, date")
-            .eq("vehicle_id", activeId)
-            .gte("date", `${monthPrefix}-01`),
-          supabase
-            .from("reminders")
-            .select("id, title, due_date")
-            .eq("vehicle_id", activeId)
-            .eq("is_done", false)
-            .order("due_date", { ascending: true })
-            .limit(4),
-        ]);
+        await loadVehicleStats(activeId);
         if (!active) return;
-
-        let fuel = 0;
-        let service = 0;
-        let other = 0;
-        for (const e of expenseData ?? []) {
-          if (e.category === "Gorivo") fuel += e.amount;
-          else if (e.category === "Servis") service += e.amount;
-          else other += e.amount;
-        }
-        setFuelTotal(fuel);
-        setServiceTotal(service);
-        setOtherTotal(other);
-        setMonthTotal(fuel + service + other);
-        setUpcoming(reminderData ?? []);
+        hasLoadedRef.current = true;
         setLoading(false);
       })();
 
       return () => {
         active = false;
       };
-    }, []),
+    }, [loadVehicleStats]),
   );
 
   async function selectVehicle(id: number) {
     setSelectedId(id);
     setSwitcherVisible(false);
     await AsyncStorage.setItem(SELECTED_VEHICLE_KEY, String(id));
+    loadVehicleStats(id);
+  }
+
+  function openMileageSheet(vehicle: Vehicle) {
+    setMileageInput(String(vehicle.mileage));
+    setMileageSheetVisible(true);
+  }
+
+  async function handleUpdateMileage() {
+    if (!selectedVehicle) return;
+    const newMileage = Number(mileageInput);
+    if (!Number.isFinite(newMileage) || newMileage < 0) {
+      showToast("Unesi ispravnu kilometražu", "error");
+      return;
+    }
+
+    setSavingMileage(true);
+    const { error } = await supabase
+      .from("vehicles")
+      .update({ mileage: newMileage })
+      .eq("id", selectedVehicle.id);
+    setSavingMileage(false);
+
+    if (error) {
+      showToast(error.message, "error");
+      return;
+    }
+    setVehicles((prev) =>
+      prev.map((v) => (v.id === selectedVehicle.id ? { ...v, mileage: newMileage } : v)),
+    );
+    setMileageSheetVisible(false);
+    showToast("Kilometraža ažurirana");
+  }
+
+  function openConsumptionSheet(vehicle: Vehicle) {
+    setConsumptionInput(
+      vehicle.avg_consumption_l100km !== null ? String(vehicle.avg_consumption_l100km) : "",
+    );
+    setConsumptionSheetVisible(true);
+  }
+
+  async function handleUpdateConsumption() {
+    if (!selectedVehicle) return;
+    const newConsumption = Number(consumptionInput.replace(",", "."));
+    if (!Number.isFinite(newConsumption) || newConsumption < 0) {
+      showToast("Unesi ispravnu potrošnju", "error");
+      return;
+    }
+
+    setSavingConsumption(true);
+    const { error } = await supabase
+      .from("vehicles")
+      .update({ avg_consumption_l100km: newConsumption })
+      .eq("id", selectedVehicle.id);
+    setSavingConsumption(false);
+
+    if (error) {
+      showToast(error.message, "error");
+      return;
+    }
+    setVehicles((prev) =>
+      prev.map((v) =>
+        v.id === selectedVehicle.id ? { ...v, avg_consumption_l100km: newConsumption } : v,
+      ),
+    );
+    setConsumptionSheetVisible(false);
+    showToast("Potrošnja ažurirana");
   }
 
   const selectedVehicle = vehicles.find((v) => v.id === selectedId) ?? null;
@@ -142,9 +231,8 @@ export default function HomeScreen() {
       >
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.greetingLabel}>{greeting()}</Text>
-            <Text style={styles.email} numberOfLines={1}>
-              {session?.user?.email}
+            <Text style={styles.name} numberOfLines={1}>
+              {greeting()}, {displayName}
             </Text>
           </View>
           <View style={styles.brandMark}>
@@ -166,6 +254,15 @@ export default function HomeScreen() {
           />
         ) : (
           <>
+            {selectedVehicle.photo_url && (
+              <Pressable
+                onPress={() => router.push(`/vehicle/${selectedVehicle.id}`)}
+                style={styles.section}
+              >
+                <Image source={{ uri: selectedVehicle.photo_url }} style={styles.photo} contentFit="cover" />
+              </Pressable>
+            )}
+
             <View style={styles.section}>
               <Pressable onPress={() => router.push(`/vehicle/${selectedVehicle.id}`)}>
                 <CutCornerCard>
@@ -184,9 +281,21 @@ export default function HomeScreen() {
                     )}
                   </View>
 
-                  <View style={styles.odoRow}>
-                    <Text style={styles.odoValue}>{formatNumberSr(selectedVehicle.mileage)}</Text>
-                    <Text style={styles.odoUnit}>km</Text>
+                  <View style={styles.odoHeader}>
+                    <View style={styles.odoRow}>
+                      <Text style={styles.odoValue}>{formatNumberSr(selectedVehicle.mileage)}</Text>
+                      <Text style={styles.odoUnit}>km</Text>
+                    </View>
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        openMileageSheet(selectedVehicle);
+                      }}
+                      hitSlop={8}
+                      style={styles.odoEditButton}
+                    >
+                      <Icon name="pencil-outline" size={15} color={Colors.accent} />
+                    </Pressable>
                   </View>
                   <Text style={styles.odoLabel}>Trenutna kilometraža</Text>
 
@@ -205,6 +314,25 @@ export default function HomeScreen() {
                   )}
                 </CutCornerCard>
               </Pressable>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.consumptionInline}>
+                <Text style={styles.consumptionValue}>
+                  {selectedVehicle.avg_consumption_l100km !== null
+                    ? selectedVehicle.avg_consumption_l100km
+                    : "—"}
+                </Text>
+                <Text style={styles.consumptionUnit}>L/100km</Text>
+                <Pressable
+                  onPress={() => openConsumptionSheet(selectedVehicle)}
+                  hitSlop={8}
+                  style={styles.consumptionEditButton}
+                >
+                  <Icon name="pencil-outline" size={15} color={Colors.accent} />
+                </Pressable>
+              </View>
+              <Text style={styles.consumptionLabel}>Prosečna potrošnja</Text>
             </View>
 
             <View style={styles.section}>
@@ -263,6 +391,52 @@ export default function HomeScreen() {
           ))}
         </View>
       </BottomSheet>
+
+      <BottomSheet
+        visible={mileageSheetVisible}
+        onClose={() => setMileageSheetVisible(false)}
+        title="Ažuriraj kilometražu"
+      >
+        <View style={{ paddingBottom: Spacing.lg }}>
+          <TextField
+            label="Nova kilometraža"
+            placeholder="npr. 142350"
+            value={mileageInput}
+            onChangeText={setMileageInput}
+            keyboardType="number-pad"
+            autoFocus
+          />
+          <Button
+            title="Sačuvaj"
+            onPress={handleUpdateMileage}
+            disabled={!mileageInput.trim()}
+            loading={savingMileage}
+          />
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={consumptionSheetVisible}
+        onClose={() => setConsumptionSheetVisible(false)}
+        title="Ažuriraj potrošnju"
+      >
+        <View style={{ paddingBottom: Spacing.lg }}>
+          <TextField
+            label="Prosečna potrošnja (L/100km)"
+            placeholder="npr. 6.8"
+            value={consumptionInput}
+            onChangeText={setConsumptionInput}
+            keyboardType="decimal-pad"
+            autoFocus
+          />
+          <Button
+            title="Sačuvaj"
+            onPress={handleUpdateConsumption}
+            disabled={!consumptionInput.trim()}
+            loading={savingConsumption}
+          />
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -276,8 +450,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     marginBottom: Spacing.xl,
   },
-  greetingLabel: { ...Typography.eyebrow, color: Colors.textTertiary, marginBottom: 6 },
-  email: { ...Typography.h2, color: Colors.textPrimary, maxWidth: 260 },
+  name: { ...Typography.h2, color: Colors.textPrimary, maxWidth: 260 },
   brandMark: {
     width: 36,
     height: 36,
@@ -287,6 +460,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   section: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
+  photo: {
+    width: "100%",
+    height: 180,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.line,
+    backgroundColor: Colors.surface,
+  },
   plateRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   vehEyebrow: { ...Typography.eyebrow, color: Colors.textTertiary, marginBottom: 6 },
   vehicleName: { ...Typography.h1, color: Colors.textPrimary },
@@ -298,10 +479,29 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   plateText: { ...Typography.tag, color: Colors.accentBright, letterSpacing: 1 },
-  odoRow: { flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: Spacing.xl },
+  odoHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginTop: Spacing.xl,
+  },
+  odoRow: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   odoValue: { ...Typography.statLarge, color: Colors.textPrimary, fontSize: 40, lineHeight: 42 },
   odoUnit: { ...Typography.caption, fontFamily: Typography.eyebrow.fontFamily, color: Colors.textSecondary },
+  odoEditButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.lineStrong,
+  },
   odoLabel: { ...Typography.tag, color: Colors.textTertiary, marginTop: 4 },
+  consumptionInline: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+  consumptionValue: { ...Typography.statLarge, fontSize: 28, lineHeight: 32, color: Colors.textPrimary },
+  consumptionUnit: { ...Typography.caption, fontFamily: Typography.eyebrow.fontFamily, color: Colors.textSecondary },
+  consumptionEditButton: { padding: 6, marginLeft: 2 },
+  consumptionLabel: { ...Typography.tag, color: Colors.textTertiary, marginTop: 4 },
   switcherButton: {
     flexDirection: "row",
     alignItems: "center",

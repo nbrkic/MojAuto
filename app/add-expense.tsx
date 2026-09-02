@@ -7,6 +7,7 @@ import { TextField } from "@/components/ui/text-field";
 import { useToast } from "@/components/ui/toast";
 import { EXPENSE_CATEGORIES } from "@/constants/categories";
 import { Colors, Spacing, Typography } from "@/constants/theme";
+import { getFuelGrades } from "@/constants/vehicle-options";
 import { toDateKey } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
@@ -22,7 +23,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type Vehicle = { id: number; make: string; model: string };
+type Vehicle = { id: number; make: string; model: string; fuel_type: string | null };
 
 export default function AddExpenseScreen() {
   const router = useRouter();
@@ -36,12 +37,14 @@ export default function AddExpenseScreen() {
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date());
+  const [fuelGrade, setFuelGrade] = useState<string | null>(null);
+  const [liters, setLiters] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     supabase
       .from("vehicles")
-      .select("id, make, model")
+      .select("id, make, model, fuel_type")
       .order("id", { ascending: false })
       .then(({ data, error }) => {
         if (error) {
@@ -55,6 +58,20 @@ export default function AddExpenseScreen() {
       });
   }, [showToast]);
 
+  const isFuel = category === "Gorivo";
+  const selectedVehicle = vehicles.find((v) => v.id === vehicleId) ?? null;
+
+  useEffect(() => {
+    if (!isFuel) {
+      setFuelGrade(null);
+      setLiters("");
+    }
+  }, [isFuel]);
+
+  useEffect(() => {
+    setFuelGrade(null);
+  }, [selectedVehicle?.fuel_type]);
+
   const canSave = vehicleId !== null && category !== null && amount.trim() !== "" && Number(amount) > 0;
 
   async function handleSave() {
@@ -65,6 +82,8 @@ export default function AddExpenseScreen() {
       amount: Number(amount),
       date: toDateKey(date),
       note: note.trim() || null,
+      fuel_grade: isFuel ? fuelGrade : null,
+      liters: isFuel && liters.trim() ? Number(liters) : null,
     });
     setSaving(false);
 
@@ -95,7 +114,7 @@ export default function AddExpenseScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + Spacing.md, paddingBottom: Spacing.xxxl }}
         keyboardShouldPersistTaps="handled"
@@ -122,6 +141,24 @@ export default function AddExpenseScreen() {
             onChange={setCategory}
             options={EXPENSE_CATEGORIES.map((c) => ({ value: c.key, label: c.label, icon: c.icon, color: c.color }))}
           />
+          {isFuel && (
+            <>
+              <SelectField
+                label="Vrsta goriva (opciono)"
+                placeholder="Izaberi vrstu goriva"
+                value={fuelGrade}
+                onChange={setFuelGrade}
+                options={getFuelGrades(selectedVehicle?.fuel_type)}
+              />
+              <TextField
+                label="Broj litara (opciono)"
+                placeholder="npr. 45"
+                value={liters}
+                onChangeText={setLiters}
+                keyboardType="decimal-pad"
+              />
+            </>
+          )}
           <TextField
             label="Naziv (opciono)"
             placeholder="npr. Mali servis"

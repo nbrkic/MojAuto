@@ -1,9 +1,12 @@
 import { Icon } from "@/components/ui/icon";
 import { Colors, Spacing, Typography } from "@/constants/theme";
-import { useEffect, type PropsWithChildren } from "react";
+import { useEffect, type PropsWithChildren, type ReactNode } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,9 +22,20 @@ type BottomSheetProps = PropsWithChildren<{
   visible: boolean;
   onClose: () => void;
   title?: string;
+  /** Rendered below the title, above the scrollable area — stays put regardless of content length (e.g. a search field). */
+  header?: ReactNode;
+  /** Locks the sheet to a fixed height instead of auto-sizing to content — pairs with `header` so it doesn't shift as content changes. */
+  fixedHeight?: boolean;
 }>;
 
-export function BottomSheet({ visible, onClose, title, children }: BottomSheetProps) {
+export function BottomSheet({
+  visible,
+  onClose,
+  title,
+  header,
+  fixedHeight,
+  children,
+}: BottomSheetProps) {
   const progress = useSharedValue(0);
   const insets = useSafeAreaInsets();
 
@@ -40,18 +54,35 @@ export function BottomSheet({ visible, onClose, title, children }: BottomSheetPr
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
       <Animated.View
-        style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.lg }, sheetStyle]}
+        style={[
+          styles.sheet,
+          fixedHeight && styles.sheetFixed,
+          { paddingBottom: insets.bottom + Spacing.lg },
+          sheetStyle,
+        ]}
       >
-        <View style={styles.handle} />
-        {title && (
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <Icon name="close" size={22} color={Colors.textSecondary} />
-            </Pressable>
-          </View>
-        )}
-        {children}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={[styles.keyboardAvoider, fixedHeight && styles.keyboardAvoiderFixed]}
+        >
+          <View style={styles.handle} />
+          {title && (
+            <View style={styles.header}>
+              <Text style={styles.title}>{title}</Text>
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Icon name="close" size={22} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
+          )}
+          {header}
+          <ScrollView
+            style={fixedHeight && styles.scrollFixed}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Animated.View>
     </Modal>
   );
@@ -73,6 +104,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
     maxHeight: "85%",
+  },
+  sheetFixed: {
+    height: "85%",
+  },
+  scrollFixed: {
+    flex: 1,
+  },
+  keyboardAvoider: {
+    flexShrink: 1,
+  },
+  keyboardAvoiderFixed: {
+    flex: 1,
   },
   handle: {
     alignSelf: "center",

@@ -9,7 +9,7 @@ import { formatKm, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -28,20 +28,25 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const showToast = useToast();
+  const firstName = session?.user?.user_metadata?.first_name as string | undefined;
+  const lastName = session?.user?.user_metadata?.last_name as string | undefined;
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
 
   const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [statsByVehicle, setStatsByVehicle] = useState<Record<number, VehicleStats>>({});
+  const hasLoadedRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setLoading(true);
+      if (!hasLoadedRef.current) setLoading(true);
       Promise.all([
         supabase.from("vehicles").select("id, make, model, year, mileage").order("id", { ascending: false }),
         supabase.from("expenses").select("vehicle_id, amount"),
       ]).then(([vehicleRes, expenseRes]) => {
         if (!active) return;
+        hasLoadedRef.current = true;
         setVehicles(vehicleRes.data ?? []);
         const stats: Record<number, VehicleStats> = {};
         for (const e of expenseRes.data ?? []) {
@@ -83,10 +88,7 @@ export default function ProfileScreen() {
   }
 
   function handleLogout() {
-    Alert.alert("Odjavi se?", "Moraćeš ponovo da se uloguješ da bi pristupio nalogu.", [
-      { text: "Otkaži", style: "cancel" },
-      { text: "Odjavi se", style: "destructive", onPress: () => supabase.auth.signOut() },
-    ]);
+    supabase.auth.signOut();
   }
 
   return (
@@ -104,8 +106,17 @@ export default function ProfileScreen() {
             <Icon name="account" size={22} color={Colors.accent} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.accountLabel}>Prijavljen kao</Text>
-            <Text style={styles.accountEmail} numberOfLines={1}>{session?.user?.email}</Text>
+            {fullName ? (
+              <>
+                <Text style={styles.accountName} numberOfLines={1}>{fullName}</Text>
+                <Text style={styles.accountEmail} numberOfLines={1}>{session?.user?.email}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.accountLabel}>Prijavljen kao</Text>
+                <Text style={styles.accountValue} numberOfLines={1}>{session?.user?.email}</Text>
+              </>
+            )}
           </View>
         </View>
       </Card>
@@ -160,14 +171,6 @@ export default function ProfileScreen() {
       )}
 
       <View style={styles.section}>
-        <Card onPress={() => router.push("/stats")} style={styles.linkCard}>
-          <Icon name="chart-donut" size={18} color={Colors.accent} />
-          <Text style={styles.linkText}>Detaljna statistika</Text>
-          <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
-        </Card>
-      </View>
-
-      <View style={styles.section}>
         <Card onPress={handleLogout} style={[styles.linkCard, { borderLeftWidth: 2, borderLeftColor: Colors.danger }]}>
           <Icon name="logout" size={18} color={Colors.danger} />
           <Text style={[styles.linkText, { color: Colors.danger }]}>Odjavi se</Text>
@@ -191,7 +194,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   accountLabel: { ...Typography.eyebrow, color: Colors.textTertiary },
-  accountEmail: { ...Typography.bodyMedium, color: Colors.textPrimary, marginTop: 4 },
+  accountName: { ...Typography.h3, color: Colors.textPrimary },
+  accountValue: { ...Typography.bodyMedium, color: Colors.textPrimary, marginTop: 4 },
+  accountEmail: { ...Typography.caption, color: Colors.textSecondary, marginTop: 4 },
   sectionHeader: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.md },
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary },
   vehicleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },

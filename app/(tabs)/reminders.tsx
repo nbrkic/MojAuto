@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { cancelReminderNotification } from "@/notifications/reminders";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -39,9 +39,10 @@ export default function RemindersScreen() {
   const [loading, setLoading] = useState(true);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const hasLoadedRef = useRef(false);
 
   const load = useCallback(() => {
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     Promise.all([
       supabase
         .from("reminders")
@@ -61,6 +62,7 @@ export default function RemindersScreen() {
         .order("date", { ascending: false })
         .limit(10),
     ]).then(([activeRes, doneRes, expenseRes]) => {
+      hasLoadedRef.current = true;
       if (activeRes.error) {
         showToast(activeRes.error.message, "error");
         setLoading(false);
@@ -143,7 +145,7 @@ export default function RemindersScreen() {
         contentContainerStyle={{ paddingTop: insets.top + Spacing.lg, paddingBottom: 120 }}
       >
         <View style={styles.section}>
-          <Text style={styles.title}>Servis</Text>
+          <Text style={styles.title}>Obaveze</Text>
         </View>
 
         {loading ? (
@@ -152,8 +154,8 @@ export default function RemindersScreen() {
           </View>
         ) : isEmpty ? (
           <EmptyState
-            icon="wrench-outline"
-            title="Nema servisnih podataka"
+            icon="clipboard-check-outline"
+            title="Nema obaveza"
             subtitle="Dodaj podsetnik da bi pratio predstojeće servise i registraciju."
             actionLabel="+ Dodaj podsetnik"
             onAction={() => router.push("/add-reminder")}

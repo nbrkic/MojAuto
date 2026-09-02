@@ -27,6 +27,11 @@ export function formatRSD(amount: number): string {
   return `${formatNumberSr(amount)} RSD`;
 }
 
+/** "8.500 €" */
+export function formatEUR(amount: number): string {
+  return `${formatNumberSr(amount)} €`;
+}
+
 function parseDate(dateStr: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
   if (!match) return null;
@@ -70,4 +75,10 @@ export function daysUntil(dateStr: string): number {
 
 export function formatKm(km: number): string {
   return `${formatNumberSr(km)} km`;
+}
+
+/** Uppercases just the first character — autoCapitalize is only a keyboard hint, not enforced. */
+export function capitalizeFirst(text: string): string {
+  if (text.length === 0) return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

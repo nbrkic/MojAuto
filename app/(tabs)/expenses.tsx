@@ -1,19 +1,20 @@
+import { BarChart } from "@/components/charts/bar-chart";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Fab } from "@/components/ui/fab";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TextField } from "@/components/ui/text-field";
 import { useToast } from "@/components/ui/toast";
 import { EXPENSE_CATEGORIES, getCategory } from "@/constants/categories";
 import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
+import { groupExpensesByMonth } from "@/lib/expense-stats";
 import { formatDateNumericSr, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -23,6 +24,8 @@ type ExpenseRow = {
   amount: number;
   date: string;
   note: string | null;
+  fuel_grade: string | null;
+  liters: number | null;
   vehicles: { make: string; model: string } | null;
 };
 
@@ -41,15 +44,19 @@ export default function ExpensesScreen() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
+  const [period, setPeriod] = useState<"month" | "year">("month");
+  const hasLoadedRef = useRef(false);
 
   const load = useCallback(() => {
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     supabase
       .from("expenses")
-      .select("id, category, amount, date, note, vehicles(make, model)")
+      .select("id, category, amount, date, note, fuel_grade, liters, vehicles(make, model)")
       .order("date", { ascending: false })
       .order("id", { ascending: false })
       .then(({ data, error }) => {
+        hasLoadedRef.current = true;
         if (error) {
           showToast(error.message, "error");
           setLoading(false);
@@ -83,19 +90,29 @@ export default function ExpensesScreen() {
 
   const now = new Date();
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const yearPrefix = String(now.getFullYear());
+
   const monthExpenses = useMemo(
     () => expenses.filter((e) => e.date.startsWith(monthPrefix)),
     [expenses, monthPrefix],
   );
-  const monthTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const yearExpenses = useMemo(
+    () => expenses.filter((e) => e.date.startsWith(yearPrefix)),
+    [expenses, yearPrefix],
+  );
+
+  const periodExpenses = period === "month" ? monthExpenses : yearExpenses;
+  const periodTotal = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   const categoryTotals = useMemo(() => {
     const map = new Map<string, number>();
-    for (const e of monthExpenses) map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+    for (const e of periodExpenses) map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
     return Array.from(map, ([category, total]) => ({ category: getCategory(category), total })).sort(
       (a, b) => b.total - a.total,
     );
-  }, [monthExpenses]);
+  }, [periodExpenses]);
+
+  const monthlyBars = useMemo(() => groupExpensesByMonth(expenses, 6), [expenses]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -110,19 +127,24 @@ export default function ExpensesScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + Spacing.lg, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingTop: insets.top + Spacing.lg, paddingBottom: Spacing.xxxl }}
       >
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Troškovi</Text>
             <Text style={styles.subtitle}>{MONTHS_SR[now.getMonth()]} {now.getFullYear()}.</Text>
           </View>
-          <Pressable
-            onPress={() => setFilterSheetVisible(true)}
-            style={[styles.filterButton, categoryFilter && styles.filterButtonActive]}
-          >
-            <Icon name="tune-variant" size={19} color={categoryFilter ? Colors.background : Colors.textSecondary} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => setFilterSheetVisible(true)}
+              style={[styles.filterButton, categoryFilter && styles.filterButtonActive]}
+            >
+              <Icon name="tune-variant" size={19} color={categoryFilter ? Colors.background : Colors.textSecondary} />
+            </Pressable>
+            <Pressable onPress={() => router.push("/add-expense")} style={styles.addButton}>
+              <Icon name="plus" size={20} color={Colors.background} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -149,15 +171,38 @@ export default function ExpensesScreen() {
           />
         ) : (
           <>
+            <View style={styles.section}>
+              <View style={styles.periodToggle}>
+                <Pressable
+                  onPress={() => setPeriod("month")}
+                  style={[styles.periodButton, period === "month" && styles.periodButtonActive]}
+                >
+                  <Text style={[styles.periodButtonText, period === "month" && styles.periodButtonTextActive]}>
+                    Mesečno
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setPeriod("year")}
+                  style={[styles.periodButton, period === "year" && styles.periodButtonActive]}
+                >
+                  <Text style={[styles.periodButtonText, period === "year" && styles.periodButtonTextActive]}>
+                    Godišnje
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
             {categoryTotals.length > 0 && (
               <Card style={styles.section}>
-                <Text style={styles.sectionTitle}>Pregled ovog meseca</Text>
+                <Text style={styles.sectionTitle}>
+                  {period === "month" ? "Pregled ovog meseca" : "Pregled ove godine"}
+                </Text>
                 <View style={styles.donutRow}>
                   <DonutChart
                     size={120}
                     strokeWidth={16}
                     data={categoryTotals.map((c) => ({ key: c.category.key, value: c.total, color: c.category.color }))}
-                    centerValue={formatRSD(monthTotal)}
+                    centerValue={formatRSD(periodTotal)}
                   />
                   <View style={styles.legend}>
                     {categoryTotals.slice(0, 4).map((c) => (
@@ -183,7 +228,11 @@ export default function ExpensesScreen() {
                   {filtered.map((item) => {
                     const cat = getCategory(item.category);
                     return (
-                      <Card key={item.id} style={[styles.row, { borderLeftWidth: 2, borderLeftColor: cat.color }]}>
+                      <Card
+                        key={item.id}
+                        onPress={() => setSelectedExpense(item)}
+                        style={[styles.row, { borderLeftWidth: 2, borderLeftColor: cat.color }]}
+                      >
                         <Icon name={cat.icon} size={18} color={cat.color} />
                         <View style={styles.rowInfo}>
                           <Text style={styles.rowTitle} numberOfLines={1}>
@@ -204,13 +253,14 @@ export default function ExpensesScreen() {
                 </View>
               )}
             </View>
+
+            <Card style={styles.section}>
+              <Text style={styles.sectionTitle}>Troškovi po mesecima</Text>
+              <BarChart data={monthlyBars} />
+            </Card>
           </>
         )}
       </ScrollView>
-
-      {expenses.length > 0 && (
-        <Fab label="Dodaj trošak" onPress={() => router.push("/add-expense")} />
-      )}
 
       <BottomSheet
         visible={filterSheetVisible}
@@ -244,6 +294,41 @@ export default function ExpensesScreen() {
           ))}
         </View>
       </BottomSheet>
+
+      <BottomSheet
+        visible={!!selectedExpense}
+        onClose={() => setSelectedExpense(null)}
+        title="Detalji troška"
+      >
+        {selectedExpense && (
+          <View style={{ paddingBottom: Spacing.lg }}>
+            {[
+              { label: "Kategorija", value: getCategory(selectedExpense.category).label },
+              { label: "Naziv", value: selectedExpense.note?.trim() || null },
+              { label: "Iznos", value: formatRSD(selectedExpense.amount) },
+              {
+                label: "Vozilo",
+                value: selectedExpense.vehicles
+                  ? `${selectedExpense.vehicles.make} ${selectedExpense.vehicles.model}`
+                  : null,
+              },
+              { label: "Vrsta goriva", value: selectedExpense.fuel_grade },
+              { label: "Broj litara", value: selectedExpense.liters ? `${selectedExpense.liters} l` : null },
+              { label: "Datum troška", value: formatDateNumericSr(selectedExpense.date) },
+            ]
+              .filter((row): row is { label: string; value: string } => !!row.value)
+              .map((row, index, all) => (
+                <View
+                  key={row.label}
+                  style={[styles.detailRow, index < all.length - 1 && styles.detailRowDivider]}
+                >
+                  <Text style={styles.specLabel}>{row.label}</Text>
+                  <Text style={styles.specValue}>{row.value}</Text>
+                </View>
+              ))}
+          </View>
+        )}
+      </BottomSheet>
     </View>
   );
 }
@@ -259,6 +344,7 @@ const styles = StyleSheet.create({
   },
   title: { ...Typography.h1, color: Colors.textPrimary },
   subtitle: { ...Typography.eyebrow, color: Colors.textTertiary, marginTop: 6 },
+  headerActions: { flexDirection: "row", gap: Spacing.sm },
   filterButton: {
     width: 40,
     height: 40,
@@ -268,7 +354,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   filterButtonActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  addButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   section: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
+  periodToggle: { flexDirection: "row", gap: Spacing.sm },
+  periodButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.lineStrong,
+  },
+  periodButtonActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  periodButtonText: { ...Typography.tag, color: Colors.textSecondary },
+  periodButtonTextActive: { color: Colors.background },
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: Spacing.md },
   donutRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xl },
   legend: { flex: 1, gap: Spacing.sm },
@@ -290,4 +394,16 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   filterRowText: { ...Typography.bodyMedium, color: Colors.textPrimary, flex: 1 },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+  },
+  detailRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.line,
+  },
+  specLabel: { ...Typography.body, color: Colors.textSecondary },
+  specValue: { ...Typography.bodyMedium, color: Colors.textPrimary },
 });

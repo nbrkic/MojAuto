@@ -4,6 +4,7 @@ import { TextField } from "@/components/ui/text-field";
 import { useToast } from "@/components/ui/toast";
 import { Colors, Spacing, Typography } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -17,35 +18,28 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function LoginScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const showToast = useToast();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const canSubmit = email.trim() !== "" && password.length >= 6;
 
   async function handleSubmit() {
     setLoading(true);
-    const { error } = isRegistering
-      ? await supabase.auth.signUp({ email: email.trim(), password })
-      : await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
 
     if (error) {
       showToast(error.message, "error");
-      return;
-    }
-
-    if (isRegistering) {
-      showToast("Proveri email za potvrdu naloga, pa se uloguj.");
     }
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + Spacing.xxxl }]}
         keyboardShouldPersistTaps="handled"
@@ -56,9 +50,7 @@ export default function LoginScreen() {
           </View>
           <Text style={styles.brandTitle}>MojAuto</Text>
           <View style={styles.brandRule} />
-          <Text style={styles.brandSubtitle}>
-            {isRegistering ? "Napravi nalog za svoje vozilo" : "Sve o tvom automobilu, na jednom mestu"}
-          </Text>
+          <Text style={styles.brandSubtitle}>Sve o tvom automobilu, na jednom mestu</Text>
         </View>
 
         <View style={styles.form}>
@@ -79,17 +71,16 @@ export default function LoginScreen() {
           />
 
           <Button
-            title={isRegistering ? "Registruj se" : "Uloguj se"}
+            title="Uloguj se"
             onPress={handleSubmit}
             disabled={!canSubmit}
             loading={loading}
             style={{ marginTop: Spacing.sm }}
           />
 
-          <Pressable onPress={() => setIsRegistering((v) => !v)} style={styles.switchButton}>
+          <Pressable onPress={() => router.push("/register")} style={styles.switchButton}>
             <Text style={styles.switchText}>
-              {isRegistering ? "Već imaš nalog? " : "Nemaš nalog? "}
-              <Text style={styles.switchTextAccent}>{isRegistering ? "Uloguj se" : "Registruj se"}</Text>
+              Nemaš nalog? <Text style={styles.switchTextAccent}>Registruj se</Text>
             </Text>
           </Pressable>
         </View>
