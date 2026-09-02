@@ -1,9 +1,9 @@
 import { scheduleReminderNotification } from "@/notifications/reminders";
+import { supabase } from "@/lib/supabase";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
-import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 type Vehicle = {
   id: number;
@@ -12,7 +12,6 @@ type Vehicle = {
 };
 
 export default function AddReminderScreen() {
-  const db = useSQLiteContext();
   const router = useRouter();
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -21,13 +20,19 @@ export default function AddReminderScreen() {
   const [dueDate, setDueDate] = useState("");
 
   useEffect(() => {
-    db.getAllAsync<Vehicle>(
-      "SELECT id, make, model FROM vehicles ORDER BY id DESC",
-    ).then((rows) => {
-      setVehicles(rows);
-      if (rows.length > 0) setVehicleId(rows[0].id);
-    });
-  }, [db]);
+    supabase
+      .from("vehicles")
+      .select("id, make, model")
+      .order("id", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          Alert.alert("Greška", error.message);
+          return;
+        }
+        setVehicles(data ?? []);
+        if (data && data.length > 0) setVehicleId(data[0].id);
+      });
+  }, []);
 
   const canSave =
     vehicleId !== null &&
@@ -42,13 +47,17 @@ export default function AddReminderScreen() {
       dueDate.trim(),
     );
 
-    await db.runAsync(
-      "INSERT INTO reminders (vehicle_id, title, due_date, notification_id) VALUES (?, ?, ?, ?)",
-      vehicleId,
-      title.trim(),
-      dueDate.trim(),
-      notificationId,
-    );
+    const { error } = await supabase.from("reminders").insert({
+      vehicle_id: vehicleId,
+      title: title.trim(),
+      due_date: dueDate.trim(),
+      notification_id: notificationId,
+    });
+
+    if (error) {
+      Alert.alert("Greška", error.message);
+      return;
+    }
     router.back();
   }
 

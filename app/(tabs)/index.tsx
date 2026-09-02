@@ -1,6 +1,6 @@
+import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -21,15 +21,22 @@ type Vehicle = {
 };
 
 export default function HomeScreen() {
-  const db = useSQLiteContext();
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
   const load = useCallback(() => {
-    db.getAllAsync<Vehicle>("SELECT * FROM vehicles ORDER BY id DESC").then(
-      setVehicles,
-    );
-  }, [db]);
+    supabase
+      .from("vehicles")
+      .select("*")
+      .order("id", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          Alert.alert("Greška", error.message);
+          return;
+        }
+        setVehicles(data ?? []);
+      });
+  }, []);
 
   useFocusEffect(load);
 
@@ -43,9 +50,14 @@ export default function HomeScreen() {
           text: "Obriši",
           style: "destructive",
           onPress: async () => {
-            await db.runAsync("DELETE FROM expenses WHERE vehicle_id = ?", id);
-            await db.runAsync("DELETE FROM reminders WHERE vehicle_id = ?", id);
-            await db.runAsync("DELETE FROM vehicles WHERE id = ?", id);
+            const { error } = await supabase
+              .from("vehicles")
+              .delete()
+              .eq("id", id);
+            if (error) {
+              Alert.alert("Greška", error.message);
+              return;
+            }
             load();
           },
         },
@@ -89,6 +101,10 @@ export default function HomeScreen() {
           )}
         />
       )}
+
+      <Pressable onPress={() => supabase.auth.signOut()}>
+        <Text style={styles.logoutText}>Odjavi se</Text>
+      </Pressable>
     </View>
   );
 }
@@ -127,5 +143,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginLeft: 12,
+  },
+  logoutText: {
+    color: "#666",
+    fontSize: 14,
+    marginTop: 16,
   },
 });

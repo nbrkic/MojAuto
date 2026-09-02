@@ -1,7 +1,7 @@
+import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
-import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 type CategoryTotal = {
   category: string;
@@ -18,22 +18,36 @@ const CATEGORY_COLORS = [
 ];
 
 export default function StatsScreen() {
-  const db = useSQLiteContext();
   const [totals, setTotals] = useState<CategoryTotal[]>([]);
   const [overallTotal, setOverallTotal] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
-      db.getAllAsync<CategoryTotal>(
-        `SELECT category, SUM(amount) AS total
-         FROM expenses
-         GROUP BY category
-         ORDER BY total DESC`,
-      ).then((rows) => {
-        setTotals(rows);
-        setOverallTotal(rows.reduce((sum, row) => sum + row.total, 0));
-      });
-    }, [db]),
+      supabase
+        .from("expenses")
+        .select("category, amount")
+        .then(({ data, error }) => {
+          if (error) {
+            Alert.alert("Greška", error.message);
+            return;
+          }
+
+          const totalsByCategory = new Map<string, number>();
+          for (const row of data ?? []) {
+            totalsByCategory.set(
+              row.category,
+              (totalsByCategory.get(row.category) ?? 0) + row.amount,
+            );
+          }
+          const sorted = Array.from(
+            totalsByCategory,
+            ([category, total]) => ({ category, total }),
+          ).sort((a, b) => b.total - a.total);
+
+          setTotals(sorted);
+          setOverallTotal(sorted.reduce((sum, row) => sum + row.total, 0));
+        });
+    }, []),
   );
 
   const maxTotal = totals.length > 0 ? totals[0].total : 0;

@@ -1,8 +1,8 @@
+import { supabase } from "@/lib/supabase";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
-import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 type Vehicle = {
   id: number;
@@ -11,7 +11,6 @@ type Vehicle = {
 };
 
 export default function AddExpenseScreen() {
-  const db = useSQLiteContext();
   const router = useRouter();
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -20,26 +19,36 @@ export default function AddExpenseScreen() {
   const [amount, setAmount] = useState("");
 
   useEffect(() => {
-    db.getAllAsync<Vehicle>(
-      "SELECT id, make, model FROM vehicles ORDER BY id DESC",
-    ).then((rows) => {
-      setVehicles(rows);
-      if (rows.length > 0) setVehicleId(rows[0].id);
-    });
-  }, [db]);
+    supabase
+      .from("vehicles")
+      .select("id, make, model")
+      .order("id", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          Alert.alert("Greška", error.message);
+          return;
+        }
+        setVehicles(data ?? []);
+        if (data && data.length > 0) setVehicleId(data[0].id);
+      });
+  }, []);
 
   const canSave =
     vehicleId !== null && category.trim() !== "" && amount.trim() !== "";
 
   async function handleSave() {
     const today = new Date().toISOString().slice(0, 10);
-    await db.runAsync(
-      "INSERT INTO expenses (vehicle_id, category, amount, date) VALUES (?, ?, ?, ?)",
-      vehicleId,
-      category.trim(),
-      Number(amount),
-      today,
-    );
+    const { error } = await supabase.from("expenses").insert({
+      vehicle_id: vehicleId,
+      category: category.trim(),
+      amount: Number(amount),
+      date: today,
+    });
+
+    if (error) {
+      Alert.alert("Greška", error.message);
+      return;
+    }
     router.back();
   }
 

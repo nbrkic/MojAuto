@@ -1,10 +1,16 @@
+import { supabase } from "@/lib/supabase";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 export default function AddVehicleScreen() {
-  const db = useSQLiteContext();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const editingId = id ? Number(id) : null;
@@ -17,48 +23,41 @@ export default function AddVehicleScreen() {
 
   useEffect(() => {
     if (editingId === null) return;
-    db.getFirstAsync<{
-      make: string;
-      model: string;
-      year: number;
-      license_plate: string | null;
-      mileage: number;
-    }>(
-      "SELECT make, model, year, license_plate, mileage FROM vehicles WHERE id = ?",
-      editingId,
-    ).then((row) => {
-      if (!row) return;
-      setMake(row.make);
-      setModel(row.model);
-      setYear(String(row.year));
-      setLicensePlate(row.license_plate ?? "");
-      setMileage(String(row.mileage));
-    });
-  }, [db, editingId]);
+    supabase
+      .from("vehicles")
+      .select("make, model, year, license_plate, mileage")
+      .eq("id", editingId)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        setMake(data.make);
+        setModel(data.model);
+        setYear(String(data.year));
+        setLicensePlate(data.license_plate ?? "");
+        setMileage(String(data.mileage));
+      });
+  }, [editingId]);
 
   const canSave =
     make.trim() !== "" && model.trim() !== "" && year.trim() !== "";
 
   async function handleSave() {
-    if (editingId !== null) {
-      await db.runAsync(
-        "UPDATE vehicles SET make = ?, model = ?, year = ?, license_plate = ?, mileage = ? WHERE id = ?",
-        make.trim(),
-        model.trim(),
-        Number(year),
-        licensePlate.trim() || null,
-        Number(mileage) || 0,
-        editingId,
-      );
-    } else {
-      await db.runAsync(
-        "INSERT INTO vehicles (make, model, year, license_plate, mileage) VALUES (?, ?, ?, ?, ?)",
-        make.trim(),
-        model.trim(),
-        Number(year),
-        licensePlate.trim() || null,
-        Number(mileage) || 0,
-      );
+    const payload = {
+      make: make.trim(),
+      model: model.trim(),
+      year: Number(year),
+      license_plate: licensePlate.trim() || null,
+      mileage: Number(mileage) || 0,
+    };
+
+    const { error } =
+      editingId !== null
+        ? await supabase.from("vehicles").update(payload).eq("id", editingId)
+        : await supabase.from("vehicles").insert(payload);
+
+    if (error) {
+      Alert.alert("Greška", error.message);
+      return;
     }
     router.back();
   }

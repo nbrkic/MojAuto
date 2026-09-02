@@ -1,6 +1,6 @@
+import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
 import {
     Alert,
@@ -16,23 +16,27 @@ type ExpenseRow = {
   category: string;
   amount: number;
   date: string;
-  vehicle_name: string;
+  vehicles: { make: string; model: string } | null;
 };
 
 export default function ExpensesScreen() {
-  const db = useSQLiteContext();
   const router = useRouter();
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
 
   const load = useCallback(() => {
-    db.getAllAsync<ExpenseRow>(
-      `SELECT expenses.id, expenses.category, expenses.amount, expenses.date,
-              vehicles.make || ' ' || vehicles.model AS vehicle_name
-       FROM expenses
-       JOIN vehicles ON vehicles.id = expenses.vehicle_id
-       ORDER BY expenses.date DESC, expenses.id DESC`,
-    ).then(setExpenses);
-  }, [db]);
+    supabase
+      .from("expenses")
+      .select("id, category, amount, date, vehicles(make, model)")
+      .order("date", { ascending: false })
+      .order("id", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          Alert.alert("Greška", error.message);
+          return;
+        }
+        setExpenses((data ?? []) as unknown as ExpenseRow[]);
+      });
+  }, []);
 
   useFocusEffect(load);
 
@@ -43,7 +47,14 @@ export default function ExpensesScreen() {
         text: "Obriši",
         style: "destructive",
         onPress: async () => {
-          await db.runAsync("DELETE FROM expenses WHERE id = ?", id);
+          const { error } = await supabase
+            .from("expenses")
+            .delete()
+            .eq("id", id);
+          if (error) {
+            Alert.alert("Greška", error.message);
+            return;
+          }
           load();
         },
       },
@@ -73,7 +84,10 @@ export default function ExpensesScreen() {
               <View style={styles.rowInfo}>
                 <Text style={styles.category}>{item.category}</Text>
                 <Text style={styles.meta}>
-                  {item.vehicle_name} · {item.date}
+                  {item.vehicles
+                    ? `${item.vehicles.make} ${item.vehicles.model}`
+                    : ""}{" "}
+                  · {item.date}
                 </Text>
               </View>
               <Text style={styles.amount}>{item.amount.toFixed(0)} RSD</Text>

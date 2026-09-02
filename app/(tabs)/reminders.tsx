@@ -1,7 +1,7 @@
 import { cancelReminderNotification } from "@/notifications/reminders";
+import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
 import {
     Alert,
@@ -16,25 +16,28 @@ type ReminderRow = {
   id: number;
   title: string;
   due_date: string;
-  vehicle_name: string;
   notification_id: string | null;
+  vehicles: { make: string; model: string } | null;
 };
 
 export default function RemindersScreen() {
-  const db = useSQLiteContext();
   const router = useRouter();
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
 
   const load = useCallback(() => {
-    db.getAllAsync<ReminderRow>(
-      `SELECT reminders.id, reminders.title, reminders.due_date, reminders.notification_id,
-              vehicles.make || ' ' || vehicles.model AS vehicle_name
-       FROM reminders
-       JOIN vehicles ON vehicles.id = reminders.vehicle_id
-       WHERE reminders.is_done = 0
-       ORDER BY reminders.due_date ASC`,
-    ).then(setReminders);
-  }, [db]);
+    supabase
+      .from("reminders")
+      .select("id, title, due_date, notification_id, vehicles(make, model)")
+      .eq("is_done", false)
+      .order("due_date", { ascending: true })
+      .then(({ data, error }) => {
+        if (error) {
+          Alert.alert("Greška", error.message);
+          return;
+        }
+        setReminders((data ?? []) as unknown as ReminderRow[]);
+      });
+  }, []);
 
   useFocusEffect(load);
 
@@ -44,7 +47,14 @@ export default function RemindersScreen() {
     if (notificationId) {
       await cancelReminderNotification(notificationId);
     }
-    await db.runAsync("UPDATE reminders SET is_done = 1 WHERE id = ?", id);
+    const { error } = await supabase
+      .from("reminders")
+      .update({ is_done: true })
+      .eq("id", id);
+    if (error) {
+      Alert.alert("Greška", error.message);
+      return;
+    }
     load();
   }
 
@@ -58,7 +68,14 @@ export default function RemindersScreen() {
           if (notificationId) {
             await cancelReminderNotification(notificationId);
           }
-          await db.runAsync("DELETE FROM reminders WHERE id = ?", id);
+          const { error } = await supabase
+            .from("reminders")
+            .delete()
+            .eq("id", id);
+          if (error) {
+            Alert.alert("Greška", error.message);
+            return;
+          }
           load();
         },
       },
@@ -92,7 +109,11 @@ export default function RemindersScreen() {
                   onPress={() => markDone(item.id, item.notification_id)}
                 >
                   <Text style={styles.reminderTitle}>{item.title}</Text>
-                  <Text style={styles.meta}>{item.vehicle_name}</Text>
+                  <Text style={styles.meta}>
+                    {item.vehicles
+                      ? `${item.vehicles.make} ${item.vehicles.model}`
+                      : ""}
+                  </Text>
                 </Pressable>
                 <Text style={[styles.date, overdue && styles.overdue]}>
                   {overdue ? "Isteklo" : item.due_date}
