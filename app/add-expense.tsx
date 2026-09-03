@@ -12,8 +12,8 @@ import { getFuelGrades } from "@/constants/vehicle-options";
 import { toDateKey } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { checkMileageServiceDue } from "@/lib/vehicle-notifications";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -26,12 +26,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type Vehicle = { id: number; make: string; model: string; fuel_type: string | null; mileage: number };
+type Vehicle = { id: number; make: string; model: string; fuel_type: string | null; mileage: number; archived: boolean };
+
+function parseDateKey(dateKey: string): Date {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
 
 export default function AddExpenseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const showToast = useToast();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const editingId = id ? Number(id) : null;
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehiclesLoaded, setVehiclesLoaded] = useState(false);
@@ -46,11 +53,12 @@ export default function AddExpenseScreen() {
   const [mileageAtFillup, setMileageAtFillup] = useState("");
   const [isFullTank, setIsFullTank] = useState(true);
   const [saving, setSaving] = useState(false);
+  const prevVehicleIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     supabase
       .from("vehicles")
-      .select("id, make, model, fuel_type, mileage")
+      .select("id, make, model, fuel_type, mileage, archived")
       .order("id", { ascending: false })
       .then(({ data, error }) => {
         if (error) {
@@ -58,13 +66,45 @@ export default function AddExpenseScreen() {
           setVehiclesLoaded(true);
           return;
         }
-        setVehicles(data ?? []);
-        if (data && data.length > 0) setVehicleId(data[0].id);
+        const list = data ?? [];
+        setVehicles(list);
+        if (editingId === null) {
+          const selectable = list.filter((v) => !v.archived);
+          if (selectable.length > 0) setVehicleId(selectable[0].id);
+        }
         setVehiclesLoaded(true);
       });
-  }, [showToast]);
+  }, [showToast, editingId]);
+
+  useEffect(() => {
+    if (editingId === null) return;
+    supabase
+      .from("expenses")
+      .select("vehicle_id, category, note, amount, date, fuel_grade, liters, price_per_liter, mileage_at_fillup, is_full_tank")
+      .eq("id", editingId)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          showToast("Trošak nije pronađen", "error");
+          router.back();
+          return;
+        }
+        setVehicleId(data.vehicle_id);
+        setCategory(data.category);
+        setNote(data.note ?? "");
+        setAmount(String(data.amount));
+        setDate(parseDateKey(data.date));
+        setFuelGrade(data.fuel_grade);
+        setLiters(data.liters !== null ? String(data.liters) : "");
+        setPricePerLiter(data.price_per_liter !== null ? String(data.price_per_liter) : "");
+        setMileageAtFillup(data.mileage_at_fillup !== null ? String(data.mileage_at_fillup) : "");
+        setIsFullTank(data.is_full_tank ?? true);
+        prevVehicleIdRef.current = data.vehicle_id;
+      });
+  }, [editingId, router, showToast]);
 
   const isFuel = category === "Gorivo";
+  const selectableVehicles = editingId !== null ? vehicles : vehicles.filter((v) => !v.archived);
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId) ?? null;
 
   useEffect(() => {
@@ -78,15 +118,19 @@ export default function AddExpenseScreen() {
   }, [isFuel]);
 
   useEffect(() => {
-    setFuelGrade(null);
-  }, [selectedVehicle?.fuel_type]);
+    if (prevVehicleIdRef.current !== null && prevVehicleIdRef.current !== vehicleId) {
+      setFuelGrade(null);
+    }
+    prevVehicleIdRef.current = vehicleId;
+  }, [vehicleId]);
 
   useEffect(() => {
+    if (editingId !== null) return;
     if (isFuel && selectedVehicle && mileageAtFillup.trim() === "") {
       setMileageAtFillup(String(selectedVehicle.mileage));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFuel, selectedVehicle?.id]);
+  }, [isFuel, selectedVehicle?.id, editingId]);
 
   function onLitersChange(text: string) {
     setLiters(text);
@@ -150,7 +194,7 @@ export default function AddExpenseScreen() {
           : null
       : null;
 
-    const { error } = await supabase.from("expenses").insert({
+    const payload = {
       vehicle_id: vehicleId,
       category,
       amount: amountNum,
@@ -161,7 +205,12 @@ export default function AddExpenseScreen() {
       price_per_liter: priceNum,
       mileage_at_fillup: mileageNum,
       is_full_tank: isFuel ? isFullTank : null,
-    });
+    };
+
+    const { error } =
+      editingId !== null
+        ? await supabase.from("expenses").update(payload).eq("id", editingId)
+        : await supabase.from("expenses").insert(payload);
 
     if (error) {
       setSaving(false);
@@ -181,11 +230,11 @@ export default function AddExpenseScreen() {
     }
 
     setSaving(false);
-    showToast("Trošak sačuvan");
+    showToast(editingId !== null ? "Trošak izmenjen" : "Trošak sačuvan");
     router.back();
   }
 
-  if (vehiclesLoaded && vehicles.length === 0) {
+  if (vehiclesLoaded && selectableVehicles.length === 0 && editingId === null) {
     return (
       <View style={styles.container}>
         <View style={[styles.header, { marginTop: insets.top + Spacing.md }]}>
@@ -211,7 +260,7 @@ export default function AddExpenseScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Dodaj trošak</Text>
+          <Text style={styles.title}>{editingId !== null ? "Izmeni trošak" : "Dodaj trošak"}</Text>
           <Pressable onPress={() => router.back()} hitSlop={8}>
             <Icon name="close" size={24} color={Colors.textSecondary} />
           </Pressable>
@@ -223,7 +272,7 @@ export default function AddExpenseScreen() {
             placeholder="Izaberi vozilo"
             value={vehicleId}
             onChange={setVehicleId}
-            options={vehicles.map((v) => ({ value: v.id, label: `${v.make} ${v.model}`, icon: "car-side" as const }))}
+            options={selectableVehicles.map((v) => ({ value: v.id, label: `${v.make} ${v.model}`, icon: "car-side" as const }))}
           />
           <SelectField
             label="Kategorija"

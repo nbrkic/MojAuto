@@ -29,3 +29,12 @@ export async function uploadVehiclePhoto(localUri: string, userId: string): Prom
   const { data } = supabase.storage.from("vehicle-photos").getPublicUrl(path);
   return data.publicUrl;
 }
+
+/** Deletes the underlying storage object for a vehicle photo's public URL. */
+export async function deleteVehiclePhotoFile(fileUrl: string): Promise<void> {
+  const marker = "/vehicle-photos/";
+  const index = fileUrl.indexOf(marker);
+  if (index === -1) return;
+  const path = fileUrl.slice(index + marker.length);
+  await supabase.storage.from("vehicle-photos").remove([path]);
+}

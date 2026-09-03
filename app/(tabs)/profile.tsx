@@ -7,9 +7,10 @@ import { Colors, Spacing, Typography } from "@/constants/theme";
 import { useAuth } from "@/lib/auth-context";
 import { formatKm, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import { cleanupVehicleFiles } from "@/lib/vehicle-cleanup";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,6 +20,7 @@ type Vehicle = {
   model: string;
   year: number;
   mileage: number;
+  archived: boolean;
 };
 
 type VehicleStats = { total: number; count: number };
@@ -35,14 +37,18 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [statsByVehicle, setStatsByVehicle] = useState<Record<number, VehicleStats>>({});
+  const [showArchived, setShowArchived] = useState(false);
   const hasLoadedRef = useRef(false);
+
+  const activeVehicles = useMemo(() => vehicles.filter((v) => !v.archived), [vehicles]);
+  const archivedVehicles = useMemo(() => vehicles.filter((v) => v.archived), [vehicles]);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       if (!hasLoadedRef.current) setLoading(true);
       Promise.all([
-        supabase.from("vehicles").select("id, make, model, year, mileage").order("id", { ascending: false }),
+        supabase.from("vehicles").select("id, make, model, year, mileage, archived").order("id", { ascending: false }),
         supabase.from("expenses").select("vehicle_id, amount"),
       ]).then(([vehicleRes, expenseRes]) => {
         if (!active) return;
@@ -74,6 +80,7 @@ export default function ProfileScreen() {
           text: "Obriši",
           style: "destructive",
           onPress: async () => {
+            await cleanupVehicleFiles(id);
             const { error } = await supabase.from("vehicles").delete().eq("id", id);
             if (error) {
               showToast(error.message, "error");
@@ -85,6 +92,16 @@ export default function ProfileScreen() {
         },
       ],
     );
+  }
+
+  async function unarchiveVehicle(id: number) {
+    const { error } = await supabase.from("vehicles").update({ archived: false }).eq("id", id);
+    if (error) {
+      showToast(error.message, "error");
+      return;
+    }
+    showToast("Vozilo vraćeno iz arhive");
+    setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, archived: false } : v)));
   }
 
   function handleLogout() {
@@ -140,34 +157,70 @@ export default function ProfileScreen() {
         </View>
       ) : (
         <View style={[styles.section, { gap: Spacing.sm }]}>
-          {vehicles.map((v) => {
-            const stats = statsByVehicle[v.id] ?? { total: 0, count: 0 };
-            return (
-              <Card key={v.id} onPress={() => router.push(`/vehicle/${v.id}`)}>
-                <View style={styles.vehicleRow}>
-                  <Icon name="car-side" size={18} color={Colors.accent} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.vehicleName} numberOfLines={1}>{v.make} {v.model}</Text>
-                    <Text style={styles.vehicleMeta} numberOfLines={1}>
-                      {v.year} · {formatKm(v.mileage)}
-                    </Text>
+          {activeVehicles.length === 0 ? (
+            <Card>
+              <Text style={styles.vehicleStatText}>Sva vozila su arhivirana.</Text>
+            </Card>
+          ) : (
+            activeVehicles.map((v) => {
+              const stats = statsByVehicle[v.id] ?? { total: 0, count: 0 };
+              return (
+                <Card key={v.id} onPress={() => router.push(`/vehicle/${v.id}`)}>
+                  <View style={styles.vehicleRow}>
+                    <Icon name="car-side" size={18} color={Colors.accent} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.vehicleName} numberOfLines={1}>{v.make} {v.model}</Text>
+                      <Text style={styles.vehicleMeta} numberOfLines={1}>
+                        {v.year} · {formatKm(v.mileage)}
+                      </Text>
+                    </View>
+                    <Icon name="chevron-right" size={18} color={Colors.textTertiary} />
+                    <Pressable onPress={() => deleteVehicle(v.id)} hitSlop={8} style={styles.deleteButton}>
+                      <Icon name="trash-can-outline" size={17} color={Colors.textTertiary} />
+                    </Pressable>
                   </View>
-                  <Icon name="chevron-right" size={18} color={Colors.textTertiary} />
-                  <Pressable onPress={() => deleteVehicle(v.id)} hitSlop={8} style={styles.deleteButton}>
-                    <Icon name="trash-can-outline" size={17} color={Colors.textTertiary} />
-                  </Pressable>
-                </View>
-                <View style={styles.vehicleStatsRow}>
-                  <Text style={styles.vehicleStatText}>{formatRSD(stats.total)} ukupno</Text>
-                  <Text style={styles.vehicleStatText}>{stats.count} {stats.count === 1 ? "trošak" : "troškova"}</Text>
-                </View>
-              </Card>
-            );
-          })}
+                  <View style={styles.vehicleStatsRow}>
+                    <Text style={styles.vehicleStatText}>{formatRSD(stats.total)} ukupno</Text>
+                    <Text style={styles.vehicleStatText}>{stats.count} {stats.count === 1 ? "trošak" : "troškova"}</Text>
+                  </View>
+                </Card>
+              );
+            })
+          )}
           <Pressable onPress={() => router.push("/add-vehicle")} style={styles.addVehicleRow}>
             <Icon name="plus" size={17} color={Colors.accent} />
             <Text style={styles.addVehicleText}>Dodaj vozilo</Text>
           </Pressable>
+        </View>
+      )}
+
+      {archivedVehicles.length > 0 && (
+        <View style={styles.section}>
+          <Pressable onPress={() => setShowArchived((s) => !s)} style={styles.archivedToggle}>
+            <Icon name={showArchived ? "chevron-down" : "chevron-right"} size={18} color={Colors.textSecondary} />
+            <Text style={styles.archivedToggleText}>Arhivirana vozila ({archivedVehicles.length})</Text>
+          </Pressable>
+          {showArchived && (
+            <View style={{ gap: Spacing.sm, marginTop: Spacing.sm }}>
+              {archivedVehicles.map((v) => (
+                <Card key={v.id} onPress={() => router.push(`/vehicle/${v.id}`)} style={styles.archivedCard}>
+                  <View style={styles.vehicleRow}>
+                    <Icon name="car-side" size={18} color={Colors.textTertiary} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.vehicleName} numberOfLines={1}>{v.make} {v.model}</Text>
+                      <Text style={styles.vehicleMeta} numberOfLines={1}>{v.year}</Text>
+                    </View>
+                    <Pressable onPress={() => unarchiveVehicle(v.id)} hitSlop={8} style={styles.deleteButton}>
+                      <Icon name="archive-arrow-up-outline" size={18} color={Colors.accent} />
+                    </Pressable>
+                    <Pressable onPress={() => deleteVehicle(v.id)} hitSlop={8} style={styles.deleteButton}>
+                      <Icon name="trash-can-outline" size={17} color={Colors.textTertiary} />
+                    </Pressable>
+                  </View>
+                </Card>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -184,6 +237,9 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   section: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
+  archivedToggle: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  archivedToggleText: { ...Typography.bodyMedium, color: Colors.textSecondary },
+  archivedCard: { opacity: 0.7 },
   title: { ...Typography.h1, color: Colors.textPrimary },
   accountRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   avatar: {

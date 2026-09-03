@@ -303,6 +303,17 @@ export default function ExpensesScreen() {
       >
         {selectedExpense && (
           <View style={{ paddingBottom: Spacing.lg }}>
+            <Pressable
+              onPress={() => {
+                const expenseId = selectedExpense.id;
+                setSelectedExpense(null);
+                router.push({ pathname: "/add-expense", params: { id: String(expenseId) } });
+              }}
+              style={styles.editRow}
+            >
+              <Icon name="pencil-outline" size={18} color={Colors.accent} />
+              <Text style={styles.editRowText}>Izmeni trošak</Text>
+            </Pressable>
             {[
               { label: "Kategorija", value: getCategory(selectedExpense.category).label },
               { label: "Naziv", value: selectedExpense.note?.trim() || null },
@@ -408,6 +419,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.line,
   },
+  editRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingBottom: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.line,
+  },
+  editRowText: { ...Typography.bodyMedium, color: Colors.accent },
   specLabel: { ...Typography.body, color: Colors.textSecondary },
   specValue: { ...Typography.bodyMedium, color: Colors.textPrimary },
 });

@@ -121,7 +121,7 @@ export default function HomeScreen() {
 
       (async () => {
         const [{ data: vehicleData }, storedId] = await Promise.all([
-          supabase.from("vehicles").select("*").order("id", { ascending: false }),
+          supabase.from("vehicles").select("*").eq("archived", false).order("id", { ascending: false }),
           AsyncStorage.getItem(SELECTED_VEHICLE_KEY),
         ]);
         if (!active) return;

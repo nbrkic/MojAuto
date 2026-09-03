@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CutCornerCard } from "@/components/ui/cut-corner-card";
@@ -7,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
 import { formatDateLongSr, formatEUR, formatKm, formatNumberSr } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import { cleanupVehicleFiles } from "@/lib/vehicle-cleanup";
 import {
   MALI_SERVIS_INTERVAL_KM,
   VELIKI_SERVIS_INTERVAL_KM,
@@ -43,6 +45,7 @@ type Vehicle = {
   tire_brand: string | null;
   rim_size: string | null;
   rim_material: string | null;
+  archived: boolean;
 };
 
 type NotificationSettings = {
@@ -107,6 +110,7 @@ export default function VehicleDetailScreen() {
         text: "Obriši",
         style: "destructive",
         onPress: async () => {
+          await cleanupVehicleFiles(vehicleId);
           const { error } = await supabase.from("vehicles").delete().eq("id", vehicleId);
           if (error) {
             showToast(error.message, "error");
@@ -117,6 +121,18 @@ export default function VehicleDetailScreen() {
         },
       },
     ]);
+  }
+
+  async function toggleArchived() {
+    if (!vehicle) return;
+    const nextArchived = !vehicle.archived;
+    const { error } = await supabase.from("vehicles").update({ archived: nextArchived }).eq("id", vehicleId);
+    if (error) {
+      showToast(error.message, "error");
+      return;
+    }
+    setVehicle({ ...vehicle, archived: nextArchived });
+    showToast(nextArchived ? "Vozilo arhivirano" : "Vozilo vraćeno iz arhive");
   }
 
   const specs = vehicle
@@ -198,7 +214,10 @@ export default function VehicleDetailScreen() {
 
           <View style={styles.section}>
             <CutCornerCard>
-              <Text style={styles.heroEyebrow}>Podaci o vozilu</Text>
+              <View style={styles.heroEyebrowRow}>
+                <Text style={styles.heroEyebrow}>Podaci o vozilu</Text>
+                {vehicle.archived && <Badge label="Arhivirano" tone="neutral" icon="archive-outline" />}
+              </View>
               <Text style={styles.heroName}>{vehicle.make} {vehicle.model}</Text>
               <Text style={styles.heroMeta}>{vehicle.year}</Text>
               <View style={styles.heroFooter}>
@@ -285,6 +304,13 @@ export default function VehicleDetailScreen() {
           </View>
 
           <View style={styles.section}>
+            <Button
+              title={vehicle.archived ? "Vrati iz arhive" : "Arhiviraj vozilo"}
+              variant="secondary"
+              icon={vehicle.archived ? "archive-arrow-up-outline" : "archive-outline"}
+              onPress={toggleArchived}
+              style={{ marginBottom: Spacing.md }}
+            />
             <Button title="Obriši vozilo" variant="danger" onPress={handleDelete} />
           </View>
         </>
@@ -328,7 +354,8 @@ const styles = StyleSheet.create({
   specValue: { ...Typography.bodyMedium, color: Colors.textPrimary },
   linkCard: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   linkText: { ...Typography.bodyMedium, color: Colors.textPrimary, flex: 1 },
-  heroEyebrow: { ...Typography.eyebrow, color: Colors.textTertiary, marginBottom: 6 },
+  heroEyebrowRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  heroEyebrow: { ...Typography.eyebrow, color: Colors.textTertiary },
   heroName: { ...Typography.h1, color: Colors.textPrimary },
   heroMeta: { ...Typography.caption, color: Colors.textSecondary, marginTop: 4 },
   heroFooter: {

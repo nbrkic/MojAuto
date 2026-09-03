@@ -43,6 +43,7 @@ export default function AddParkingShortcutScreen() {
     supabase
       .from("vehicles")
       .select("id, make, model, license_plate")
+      .eq("archived", false)
       .order("id", { ascending: false })
       .then(({ data, error }) => {
         if (error) {

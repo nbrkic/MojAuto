@@ -45,6 +45,7 @@ export default function AddReminderScreen() {
     supabase
       .from("vehicles")
       .select("id, make, model")
+      .eq("archived", false)
       .order("id", { ascending: false })
       .then(({ data, error }) => {
         if (error) {
