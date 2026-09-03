@@ -2,12 +2,12 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Fab } from "@/components/ui/fab";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TextField } from "@/components/ui/text-field";
 import { useToast } from "@/components/ui/toast";
 import { Colors, Spacing, Typography } from "@/constants/theme";
+import { addReminderToDeviceCalendar } from "@/lib/calendar";
 import { daysUntil, formatDateNumericSr, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { cancelReminderNotification } from "@/notifications/reminders";
@@ -52,6 +52,7 @@ export default function RemindersScreen() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [tab, setTab] = useState<Tab>("active");
+  const [checkedIds, setCheckedIds] = useState<Set<number>>(new Set());
   const hasLoadedRef = useRef(false);
 
   const [addNoteVisible, setAddNoteVisible] = useState(false);
@@ -117,6 +118,15 @@ export default function RemindersScreen() {
   const activeReminders = useMemo(() => reminders.filter((r) => daysUntil(r.due_date) >= 0), [reminders]);
   const overdueReminders = useMemo(() => reminders.filter((r) => daysUntil(r.due_date) < 0), [reminders]);
 
+  function toggleChecked(id: number) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function markDone(id: number, notificationId: string | null) {
     if (notificationId) await cancelReminderNotification(notificationId);
     const { error } = await supabase.from("reminders").update({ is_done: true }).eq("id", id);
@@ -124,8 +134,20 @@ export default function RemindersScreen() {
       showToast(error.message, "error");
       return;
     }
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     showToast("Označeno kao završeno");
     load();
+  }
+
+  async function addToCalendar(r: ReminderRow) {
+    const vehicleLabel = r.vehicles ? `${r.vehicles.make} ${r.vehicles.model}` : null;
+    const result = await addReminderToDeviceCalendar(r.title, r.due_date, vehicleLabel);
+    if (result === "saved") showToast("Dodato u kalendar");
+    else if (result === "error") showToast("Nije uspelo dodavanje u kalendar", "error");
   }
 
   function deleteReminder(id: number, notificationId: string | null) {
@@ -195,22 +217,38 @@ export default function RemindersScreen() {
     const soon = days >= 0 && days <= 7;
     const tone = overdue ? Colors.danger : soon ? Colors.warning : Colors.accent;
     const statusText = overdue ? "Isteklo" : days === 0 ? "Danas" : `Za ${days} ${days === 1 ? "dan" : "dana"}`;
+    const isChecked = checkedIds.has(r.id);
     return (
-      <Card key={r.id} style={[styles.reminderRow, { borderLeftWidth: 2, borderLeftColor: tone }]}>
-        <Pressable onPress={() => markDone(r.id, r.notification_id)} style={styles.checkMark} hitSlop={8}>
-          <Icon name="checkbox-blank-circle-outline" size={20} color={Colors.textTertiary} />
-        </Pressable>
-        <View style={styles.reminderInfo}>
-          <Text style={styles.reminderTitle} numberOfLines={1}>{r.title}</Text>
-          <Text style={styles.reminderMeta} numberOfLines={1}>
+      <Card key={r.id} style={[styles.reminderCard, { borderLeftWidth: 2, borderLeftColor: tone }]}>
+        <View style={styles.reminderTopRow}>
+          <Pressable onPress={() => toggleChecked(r.id)} style={styles.checkMark} hitSlop={8}>
+            <Icon
+              name={isChecked ? "checkbox-marked-circle" : "checkbox-blank-circle-outline"}
+              size={20}
+              color={isChecked ? Colors.success : Colors.textTertiary}
+            />
+          </Pressable>
+          <Text style={[styles.reminderTitle, { flex: 1 }]} numberOfLines={1}>{r.title}</Text>
+          {isChecked ? (
+            <Pressable onPress={() => markDone(r.id, r.notification_id)} style={styles.confirmButton}>
+              <Text style={styles.confirmButtonText}>Završeno</Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.statusText, { color: tone }]}>{statusText}</Text>
+          )}
+        </View>
+        <View style={styles.reminderBottomRow}>
+          <Text style={[styles.reminderMeta, { flex: 1, marginTop: 0 }]} numberOfLines={1}>
             {r.vehicles ? `${r.vehicles.make} ${r.vehicles.model} · ` : ""}
             {formatDateNumericSr(r.due_date)}
           </Text>
+          <Pressable onPress={() => addToCalendar(r)} hitSlop={8} style={styles.rowAction}>
+            <Icon name="calendar-plus" size={18} color={Colors.textTertiary} />
+          </Pressable>
+          <Pressable onPress={() => deleteReminder(r.id, r.notification_id)} hitSlop={8} style={styles.rowAction}>
+            <Icon name="trash-can-outline" size={17} color={Colors.textTertiary} />
+          </Pressable>
         </View>
-        <Text style={[styles.statusText, { color: tone }]}>{statusText}</Text>
-        <Pressable onPress={() => deleteReminder(r.id, r.notification_id)} hitSlop={8} style={styles.rowDelete}>
-          <Icon name="trash-can-outline" size={17} color={Colors.textTertiary} />
-        </Pressable>
       </Card>
     );
   }
@@ -222,10 +260,17 @@ export default function RemindersScreen() {
       >
         <View style={styles.headerRow}>
           <Text style={styles.title}>Obaveze</Text>
-          <Pressable onPress={() => setAddNoteVisible(true)} style={styles.addButton}>
-            <Icon name="plus" size={16} color={Colors.background} />
-            <Text style={styles.addButtonText}>Nova beleška</Text>
-          </Pressable>
+          {tab === "notes" ? (
+            <Pressable onPress={() => setAddNoteVisible(true)} style={styles.addButton}>
+              <Icon name="plus" size={16} color={Colors.background} />
+              <Text style={styles.addButtonText}>Nova beleška</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => router.push("/add-reminder")} style={styles.addButton}>
+              <Icon name="plus" size={16} color={Colors.background} />
+              <Text style={styles.addButtonText}>Dodaj podsetnik</Text>
+            </Pressable>
+          )}
         </View>
 
         {loading ? (
@@ -352,10 +397,6 @@ export default function RemindersScreen() {
         )}
       </ScrollView>
 
-      {!isEmpty && tab !== "notes" && (
-        <Fab label="Dodaj podsetnik" onPress={() => router.push("/add-reminder")} />
-      )}
-
       <BottomSheet
         visible={addNoteVisible}
         onClose={() => setAddNoteVisible(false)}
@@ -425,7 +466,23 @@ const styles = StyleSheet.create({
   tabButtonTextActive: { color: Colors.background },
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: Spacing.md },
   emptyText: { ...Typography.body, color: Colors.textSecondary },
-  reminderRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
+  reminderCard: { gap: Spacing.sm },
+  reminderTopRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
+  reminderBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.line,
+  },
+  rowAction: { padding: 4 },
+  confirmButton: {
+    backgroundColor: Colors.success,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  confirmButtonText: { ...Typography.tag, color: Colors.background },
   checkMark: { padding: 2 },
   reminderInfo: { flex: 1, minWidth: 0 },
   reminderTitle: { ...Typography.bodyMedium, color: Colors.textPrimary },
