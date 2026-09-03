@@ -7,12 +7,13 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,9 +32,17 @@ export default function RegisterScreen() {
   const canSubmit =
     firstName.trim() !== "" && lastName.trim() !== "" && email.trim() !== "" && password.length >= 6;
 
+  function goToLogin() {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/login");
+    }
+  }
+
   async function handleSubmit() {
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
@@ -50,18 +59,25 @@ export default function RegisterScreen() {
       return;
     }
 
-    showToast("Proveri email za potvrdu naloga, pa se uloguj.");
-    router.back();
+    showToast("Dobrodošli na MojAuto, Vaš lični dnevnik za automobile");
+
+    if (!data.session) {
+      // No session means email confirmation is required — the root navigator
+      // only swaps to the authenticated stack once one exists, so send them
+      // back to login themselves in that case.
+      goToLogin();
+    }
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView style={styles.container} behavior="padding">
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + Spacing.md, paddingBottom: Spacing.xxxl }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={8} style={styles.backButton}>
+          <Pressable onPress={goToLogin} hitSlop={8} style={styles.backButton}>
             <Icon name="chevron-left" size={26} color={Colors.textPrimary} />
           </Pressable>
           <Text style={styles.eyebrow}>Novi nalog</Text>
@@ -106,13 +122,14 @@ export default function RegisterScreen() {
             style={{ marginTop: Spacing.sm }}
           />
 
-          <Pressable onPress={() => router.back()} style={styles.switchButton}>
+          <Pressable onPress={goToLogin} style={styles.switchButton}>
             <Text style={styles.switchText}>
               Već imaš nalog? <Text style={styles.switchTextAccent}>Uloguj se</Text>
             </Text>
           </Pressable>
         </View>
       </ScrollView>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
