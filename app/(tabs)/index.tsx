@@ -273,7 +273,10 @@ export default function HomeScreen() {
             )}
 
             <View style={styles.section}>
-              <Pressable onPress={() => router.push(`/vehicle/${selectedVehicle.id}`)}>
+              <Pressable
+                onPress={() => router.push(`/vehicle/${selectedVehicle.id}`)}
+                style={({ pressed }) => [pressed && styles.cardPressed]}
+              >
                 <CutCornerCard>
                   <View style={styles.plateRow}>
                     <View style={{ flex: 1 }}>
@@ -283,11 +286,14 @@ export default function HomeScreen() {
                       </Text>
                       <Text style={styles.vehicleMeta}>{selectedVehicle.year}</Text>
                     </View>
-                    {selectedVehicle.license_plate && (
-                      <View style={styles.plateBadge}>
-                        <Text style={styles.plateText}>{selectedVehicle.license_plate}</Text>
-                      </View>
-                    )}
+                    <View style={styles.cardTopRight}>
+                      <Icon name="chevron-right" size={16} color={Colors.textTertiary} />
+                      {selectedVehicle.license_plate && (
+                        <View style={styles.plateBadge}>
+                          <Text style={styles.plateText}>{selectedVehicle.license_plate}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
 
                   <View style={styles.odoHeader}>
@@ -308,19 +314,27 @@ export default function HomeScreen() {
                   </View>
                   <Text style={styles.odoLabel}>Trenutna kilometraža</Text>
 
-                  {vehicles.length > 1 && (
-                    <Pressable
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        setSwitcherVisible(true);
-                      }}
-                      style={styles.switcherButton}
-                      hitSlop={8}
-                    >
-                      <Text style={styles.switcherText}>Promeni vozilo</Text>
-                      <Icon name="chevron-down" size={14} color={Colors.accent} />
-                    </Pressable>
-                  )}
+                  <View style={styles.cardFooterRow}>
+                    {vehicles.length > 1 ? (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSwitcherVisible(true);
+                        }}
+                        style={styles.switcherButton}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.switcherText}>Promeni vozilo</Text>
+                        <Icon name="chevron-down" size={14} color={Colors.accent} />
+                      </Pressable>
+                    ) : (
+                      <View />
+                    )}
+                    <View style={styles.detailsHint}>
+                      <Text style={styles.detailsHintText}>Detalji</Text>
+                      <Icon name="chevron-right" size={14} color={Colors.textTertiary} />
+                    </View>
+                  </View>
                 </CutCornerCard>
               </Pressable>
             </View>
@@ -477,10 +491,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.line,
     backgroundColor: Colors.surface,
   },
+  cardPressed: { opacity: 0.85 },
   plateRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   vehEyebrow: { ...Typography.eyebrow, color: Colors.textTertiary, marginBottom: 6 },
   vehicleName: { ...Typography.h1, color: Colors.textPrimary },
   vehicleMeta: { ...Typography.caption, color: Colors.textSecondary, marginTop: 4 },
+  cardTopRight: { alignItems: "flex-end", gap: Spacing.sm },
   plateBadge: {
     borderWidth: 1,
     borderColor: Colors.accentDeep,
@@ -511,14 +527,16 @@ const styles = StyleSheet.create({
   consumptionUnit: { ...Typography.caption, fontFamily: Typography.eyebrow.fontFamily, color: Colors.textSecondary },
   consumptionEditButton: { padding: 6, marginLeft: 2 },
   consumptionLabel: { ...Typography.tag, color: Colors.textTertiary, marginTop: 4 },
-  switcherButton: {
+  cardFooterRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    alignSelf: "flex-start",
+    justifyContent: "space-between",
     marginTop: Spacing.lg,
   },
+  switcherButton: { flexDirection: "row", alignItems: "center", gap: 4 },
   switcherText: { ...Typography.tag, color: Colors.accent },
+  detailsHint: { flexDirection: "row", alignItems: "center", gap: 4 },
+  detailsHintText: { ...Typography.tag, color: Colors.textTertiary },
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: Spacing.md },
   emptyUpcoming: { ...Typography.body, color: Colors.textSecondary },
   reminderRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },

@@ -152,6 +152,7 @@ export default function ProfileScreen() {
                       {v.year} · {formatKm(v.mileage)}
                     </Text>
                   </View>
+                  <Icon name="chevron-right" size={18} color={Colors.textTertiary} />
                   <Pressable onPress={() => deleteVehicle(v.id)} hitSlop={8} style={styles.deleteButton}>
                     <Icon name="trash-can-outline" size={17} color={Colors.textTertiary} />
                   </Pressable>

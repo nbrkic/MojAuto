@@ -25,12 +25,17 @@ export default function RegisterScreen() {
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const canSubmit =
-    firstName.trim() !== "" && lastName.trim() !== "" && email.trim() !== "" && password.length >= 6;
+    firstName.trim() !== "" &&
+    lastName.trim() !== "" &&
+    city.trim() !== "" &&
+    email.trim() !== "" &&
+    password.length >= 6;
 
   function goToLogin() {
     if (router.canGoBack()) {
@@ -49,6 +54,7 @@ export default function RegisterScreen() {
         data: {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
+          city: city.trim(),
         },
       },
     });
@@ -97,6 +103,14 @@ export default function RegisterScreen() {
               <TextField label="Prezime" placeholder="Marković" value={lastName} onChangeText={setLastName} />
             </View>
           </View>
+
+          <TextField
+            label="Grad/Lokacija"
+            placeholder="npr. Beograd"
+            value={city}
+            onChangeText={setCity}
+            autoCapitalize="words"
+          />
 
           <TextField
             label="Email"
