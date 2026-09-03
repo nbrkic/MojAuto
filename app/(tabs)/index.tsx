@@ -12,6 +12,7 @@ import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
 import { daysUntil, formatNumberSr, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { checkMileageServiceDue } from "@/lib/vehicle-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { Image } from "expo-image";
@@ -161,6 +162,7 @@ export default function HomeScreen() {
       showToast("Unesi ispravnu kilometražu", "error");
       return;
     }
+    const previousMileage = selectedVehicle.mileage;
 
     setSavingMileage(true);
     const { error } = await supabase
@@ -178,6 +180,13 @@ export default function HomeScreen() {
     );
     setMileageSheetVisible(false);
     showToast("Kilometraža ažurirana");
+
+    checkMileageServiceDue(
+      selectedVehicle.id,
+      `${selectedVehicle.make} ${selectedVehicle.model}`,
+      previousMileage,
+      newMileage,
+    );
   }
 
   function openConsumptionSheet(vehicle: Vehicle) {

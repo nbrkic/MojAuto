@@ -62,3 +62,26 @@ export async function scheduleReminderNotification(
 export function cancelReminderNotification(notificationId: string) {
   return Notifications.cancelScheduledNotificationAsync(notificationId);
 }
+
+/** Schedules a one-off local notification at an exact date. Returns null if that date has passed. */
+export async function scheduleFixedDateNotification(title: string, body: string, date: Date) {
+  if (date.getTime() <= Date.now()) {
+    return null;
+  }
+  return Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date,
+      channelId: "reminders",
+    },
+  });
+}
+
+/** Fires a local notification right away — used for mileage-based alerts, which can't be pre-scheduled by date. */
+export function sendImmediateNotification(title: string, body: string) {
+  return Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: null,
+  });
+}

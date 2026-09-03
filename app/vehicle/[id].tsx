@@ -5,8 +5,13 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
-import { formatEUR, formatNumberSr } from "@/lib/format";
+import { formatDateLongSr, formatEUR, formatKm, formatNumberSr } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import {
+  MALI_SERVIS_INTERVAL_KM,
+  VELIKI_SERVIS_INTERVAL_KM,
+  nextAnnualDueDate,
+} from "@/lib/vehicle-notifications";
 import { useFocusEffect } from "@react-navigation/native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -40,6 +45,20 @@ type Vehicle = {
   rim_material: string | null;
 };
 
+type NotificationSettings = {
+  mali_servis_enabled: boolean;
+  mali_servis_last_km: number | null;
+  veliki_servis_enabled: boolean;
+  veliki_servis_last_km: number | null;
+  tires_enabled: boolean;
+  registration_enabled: boolean;
+  registration_last_date: string | null;
+  registration_notify_days_before: number | null;
+  insurance_enabled: boolean;
+  insurance_last_date: string | null;
+  insurance_notify_days_before: number | null;
+};
+
 export default function VehicleDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -49,28 +68,32 @@ export default function VehicleDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
   const loadedVehicleIdRef = useRef<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       if (loadedVehicleIdRef.current !== vehicleId) setLoading(true);
-      supabase
-        .from("vehicles")
-        .select("*")
-        .eq("id", vehicleId)
-        .single()
-        .then(({ data, error }) => {
-          if (!active) return;
-          if (error || !data) {
-            showToast("Vozilo nije pronađeno", "error");
-            router.back();
-            return;
-          }
-          loadedVehicleIdRef.current = vehicleId;
-          setVehicle(data);
-          setLoading(false);
-        });
+      Promise.all([
+        supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
+        supabase
+          .from("vehicle_notification_settings")
+          .select("*")
+          .eq("vehicle_id", vehicleId)
+          .maybeSingle(),
+      ]).then(([vehicleRes, settingsRes]) => {
+        if (!active) return;
+        if (vehicleRes.error || !vehicleRes.data) {
+          showToast("Vozilo nije pronađeno", "error");
+          router.back();
+          return;
+        }
+        loadedVehicleIdRef.current = vehicleId;
+        setVehicle(vehicleRes.data);
+        setNotificationSettings(settingsRes.data);
+        setLoading(false);
+      });
       return () => {
         active = false;
       };
@@ -115,6 +138,31 @@ export default function VehicleDetailScreen() {
         { label: "VIN / broj šasije", value: vehicle.vin },
         { label: "Kupovna cena", value: vehicle.purchase_price_eur ? formatEUR(vehicle.purchase_price_eur) : null },
       ].filter((s): s is { label: string; value: string } => !!s.value)
+    : [];
+
+  const s = notificationSettings;
+  const activeNotifications = s
+    ? [
+        s.mali_servis_enabled && s.mali_servis_last_km !== null
+          ? { label: "Mali servis", value: `Sledeći na ${formatKm(s.mali_servis_last_km + MALI_SERVIS_INTERVAL_KM)}` }
+          : null,
+        s.veliki_servis_enabled && s.veliki_servis_last_km !== null
+          ? { label: "Veliki servis", value: `Sledeći na ${formatKm(s.veliki_servis_last_km + VELIKI_SERVIS_INTERVAL_KM)}` }
+          : null,
+        s.tires_enabled ? { label: "Zamena guma", value: "1. novembar / 1. april" } : null,
+        s.registration_enabled && s.registration_last_date
+          ? {
+              label: "Registracija",
+              value: `${formatDateLongSr(nextAnnualDueDate(s.registration_last_date))} · ${s.registration_notify_days_before ?? 0} dana pre`,
+            }
+          : null,
+        s.insurance_enabled && s.insurance_last_date
+          ? {
+              label: "Osiguranje",
+              value: `${formatDateLongSr(nextAnnualDueDate(s.insurance_last_date))} · ${s.insurance_notify_days_before ?? 0} dana pre`,
+            }
+          : null,
+      ].filter((n): n is { label: string; value: string } => !!n)
     : [];
 
   return (
@@ -184,6 +232,23 @@ export default function VehicleDetailScreen() {
             </View>
           )}
 
+          {activeNotifications.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Aktivna obaveštenja</Text>
+              <Card padded={false}>
+                {activeNotifications.map((item, index) => (
+                  <View
+                    key={item.label}
+                    style={[styles.specRow, index < activeNotifications.length - 1 && styles.specRowDivider]}
+                  >
+                    <Text style={styles.specLabel}>{item.label}</Text>
+                    <Text style={styles.specValue}>{item.value}</Text>
+                  </View>
+                ))}
+              </Card>
+            </View>
+          )}
+
           <View style={styles.section}>
             <Card
               onPress={() => router.push({ pathname: "/vehicle-specs", params: { id: String(vehicleId) } })}
@@ -193,6 +258,17 @@ export default function VehicleDetailScreen() {
               <Text style={styles.linkText}>
                 {specs.length > 0 ? "Uredi detaljne specifikacije" : "Dodaj detaljne specifikacije"}
               </Text>
+              <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
+            </Card>
+          </View>
+
+          <View style={styles.section}>
+            <Card
+              onPress={() => router.push({ pathname: "/notification-settings", params: { id: String(vehicleId) } })}
+              style={styles.linkCard}
+            >
+              <Icon name="bell-ring-outline" size={18} color={Colors.accent} />
+              <Text style={styles.linkText}>Podešavanje obaveštenja</Text>
               <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
             </Card>
           </View>
