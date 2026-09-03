@@ -387,6 +387,14 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.section}>
+              <Card onPress={() => router.push("/fuel-prices")} style={styles.linkCard}>
+                <Icon name="gas-station" size={18} color={Colors.accent} />
+                <Text style={styles.linkText}>Cene goriva u Srbiji</Text>
+                <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
+              </Card>
+            </View>
+
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Uskoro</Text>
               {upcoming.length === 0 ? (
                 <Card>
@@ -562,6 +570,8 @@ const styles = StyleSheet.create({
   detailsHint: { flexDirection: "row", alignItems: "center", gap: 4 },
   detailsHintText: { ...Typography.tag, color: Colors.textTertiary },
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: Spacing.md },
+  linkCard: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
+  linkText: { ...Typography.bodyMedium, color: Colors.textPrimary, flex: 1 },
   emptyUpcoming: { ...Typography.body, color: Colors.textSecondary },
   reminderRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   reminderMark: { width: 3, height: 20 },

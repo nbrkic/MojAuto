@@ -66,7 +66,7 @@ export function LineChart({ data, height = 150, color = Colors.accent }: LineCha
 
         <View style={{ flex: 1 }} onLayout={handleLayout}>
           {plotWidth > 0 && (
-            <Svg width={plotWidth} height={height}>
+            <Svg width={plotWidth} height={height - PADDING_BOTTOM}>
               {gridValues.map((v, i) => (
                 <SvgLine
                   key={i}
@@ -114,6 +114,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", justifyContent: "center" },
   emptyText: { ...Typography.body, color: Colors.textSecondary },
   yLabel: { ...Typography.tag, color: Colors.textTertiary, fontSize: 9 },
-  xLabelsRow: { height: PADDING_BOTTOM, marginTop: 4 },
+  xLabelsRow: { height: PADDING_BOTTOM, marginTop: 0 },
   xLabel: { ...Typography.tag, color: Colors.textTertiary, fontSize: 9 },
 });
