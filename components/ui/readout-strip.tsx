@@ -30,7 +30,7 @@ export function ReadoutStrip({ items }: { items: ReadoutItem[] }) {
           key={item.key}
           style={[styles.cell, index < items.length - 1 && styles.cellDivider]}
         >
-          <Text style={styles.label} numberOfLines={1}>
+          <Text style={styles.label}>
             {item.label}
           </Text>
           <Text
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.line,
   },
-  cell: { flex: 1, minWidth: 0, paddingVertical: 14, paddingHorizontal: 12 },
+  cell: { flex: 1, minWidth: 0, justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 12 },
   cellDivider: {
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: Colors.line,

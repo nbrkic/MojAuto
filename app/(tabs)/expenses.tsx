@@ -142,7 +142,8 @@ export default function ExpensesScreen() {
               <Icon name="tune-variant" size={19} color={categoryFilter ? Colors.background : Colors.textSecondary} />
             </Pressable>
             <Pressable onPress={() => router.push("/add-expense")} style={styles.addButton}>
-              <Icon name="plus" size={20} color={Colors.background} />
+              <Icon name="plus" size={16} color={Colors.background} />
+              <Text style={styles.addButtonText}>Dodaj trošak</Text>
             </Pressable>
           </View>
         </View>
@@ -355,12 +356,15 @@ const styles = StyleSheet.create({
   },
   filterButtonActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
   addButton: {
-    width: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
     height: 40,
     backgroundColor: Colors.accent,
-    alignItems: "center",
+    paddingHorizontal: Spacing.md,
     justifyContent: "center",
   },
+  addButtonText: { ...Typography.button, color: Colors.background },
   section: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
   periodToggle: { flexDirection: "row", gap: Spacing.sm },
   periodButton: {

@@ -3,6 +3,7 @@ import { DateField } from "@/components/ui/date-field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { SelectField } from "@/components/ui/select-field";
+import { SwitchRow } from "@/components/ui/switch-row";
 import { TextField } from "@/components/ui/text-field";
 import { useToast } from "@/components/ui/toast";
 import { EXPENSE_CATEGORIES } from "@/constants/categories";
@@ -10,6 +11,7 @@ import { Colors, Spacing, Typography } from "@/constants/theme";
 import { getFuelGrades } from "@/constants/vehicle-options";
 import { toDateKey } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import { checkMileageServiceDue } from "@/lib/vehicle-notifications";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -24,7 +26,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type Vehicle = { id: number; make: string; model: string; fuel_type: string | null };
+type Vehicle = { id: number; make: string; model: string; fuel_type: string | null; mileage: number };
 
 export default function AddExpenseScreen() {
   const router = useRouter();
@@ -40,12 +42,15 @@ export default function AddExpenseScreen() {
   const [date, setDate] = useState(new Date());
   const [fuelGrade, setFuelGrade] = useState<string | null>(null);
   const [liters, setLiters] = useState("");
+  const [pricePerLiter, setPricePerLiter] = useState("");
+  const [mileageAtFillup, setMileageAtFillup] = useState("");
+  const [isFullTank, setIsFullTank] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     supabase
       .from("vehicles")
-      .select("id, make, model, fuel_type")
+      .select("id, make, model, fuel_type, mileage")
       .order("id", { ascending: false })
       .then(({ data, error }) => {
         if (error) {
@@ -66,6 +71,9 @@ export default function AddExpenseScreen() {
     if (!isFuel) {
       setFuelGrade(null);
       setLiters("");
+      setPricePerLiter("");
+      setMileageAtFillup("");
+      setIsFullTank(true);
     }
   }, [isFuel]);
 
@@ -73,25 +81,106 @@ export default function AddExpenseScreen() {
     setFuelGrade(null);
   }, [selectedVehicle?.fuel_type]);
 
-  const canSave = vehicleId !== null && category !== null && amount.trim() !== "" && Number(amount) > 0;
+  useEffect(() => {
+    if (isFuel && selectedVehicle && mileageAtFillup.trim() === "") {
+      setMileageAtFillup(String(selectedVehicle.mileage));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFuel, selectedVehicle?.id]);
+
+  function onLitersChange(text: string) {
+    setLiters(text);
+    const l = Number(text.replace(",", "."));
+    const p = Number(pricePerLiter.replace(",", "."));
+    if (text.trim() !== "" && Number.isFinite(l) && l > 0 && pricePerLiter.trim() !== "" && Number.isFinite(p) && p > 0) {
+      setAmount(String(Math.round(l * p)));
+    }
+  }
+
+  function onPricePerLiterChange(text: string) {
+    setPricePerLiter(text);
+    const p = Number(text.replace(",", "."));
+    const l = Number(liters.replace(",", "."));
+    if (text.trim() !== "" && Number.isFinite(p) && p > 0 && liters.trim() !== "" && Number.isFinite(l) && l > 0) {
+      setAmount(String(Math.round(l * p)));
+    }
+  }
+
+  function onAmountChange(text: string) {
+    setAmount(text);
+    if (!isFuel) return;
+    const a = Number(text.replace(",", "."));
+    const l = Number(liters.replace(",", "."));
+    if (
+      text.trim() !== "" &&
+      Number.isFinite(a) &&
+      a > 0 &&
+      liters.trim() !== "" &&
+      Number.isFinite(l) &&
+      l > 0 &&
+      pricePerLiter.trim() === ""
+    ) {
+      setPricePerLiter(String(Math.round((a / l) * 100) / 100));
+    }
+  }
+
+  const canSave =
+    vehicleId !== null &&
+    category !== null &&
+    amount.trim() !== "" &&
+    Number(amount) > 0 &&
+    (!isFuel ||
+      (liters.trim() !== "" &&
+        Number(liters.replace(",", ".")) > 0 &&
+        mileageAtFillup.trim() !== "" &&
+        Number(mileageAtFillup) >= 0));
 
   async function handleSave() {
+    if (!selectedVehicle) return;
     setSaving(true);
+
+    const litersNum = isFuel ? Number(liters.replace(",", ".")) : null;
+    const amountNum = Number(amount);
+    const mileageNum = isFuel ? Number(mileageAtFillup) : null;
+    const priceNum = isFuel
+      ? pricePerLiter.trim()
+        ? Number(pricePerLiter.replace(",", "."))
+        : litersNum && litersNum > 0
+          ? Math.round((amountNum / litersNum) * 100) / 100
+          : null
+      : null;
+
     const { error } = await supabase.from("expenses").insert({
       vehicle_id: vehicleId,
       category,
-      amount: Number(amount),
+      amount: amountNum,
       date: toDateKey(date),
       note: note.trim() || null,
       fuel_grade: isFuel ? fuelGrade : null,
-      liters: isFuel && liters.trim() ? Number(liters) : null,
+      liters: litersNum,
+      price_per_liter: priceNum,
+      mileage_at_fillup: mileageNum,
+      is_full_tank: isFuel ? isFullTank : null,
     });
-    setSaving(false);
 
     if (error) {
+      setSaving(false);
       showToast(error.message, "error");
       return;
     }
+
+    if (isFuel && mileageNum !== null && mileageNum > selectedVehicle.mileage) {
+      const previousMileage = selectedVehicle.mileage;
+      await supabase.from("vehicles").update({ mileage: mileageNum }).eq("id", selectedVehicle.id);
+      checkMileageServiceDue(
+        selectedVehicle.id,
+        `${selectedVehicle.make} ${selectedVehicle.model}`,
+        previousMileage,
+        mileageNum,
+      );
+    }
+
+    setSaving(false);
     showToast("Trošak sačuvan");
     router.back();
   }
@@ -153,11 +242,31 @@ export default function AddExpenseScreen() {
                 options={getFuelGrades(selectedVehicle?.fuel_type)}
               />
               <TextField
-                label="Broj litara (opciono)"
+                label="Broj litara"
                 placeholder="npr. 45"
                 value={liters}
-                onChangeText={setLiters}
+                onChangeText={onLitersChange}
                 keyboardType="decimal-pad"
+              />
+              <TextField
+                label="Cena po litru (RSD, opciono)"
+                placeholder="npr. 197.5"
+                value={pricePerLiter}
+                onChangeText={onPricePerLiterChange}
+                keyboardType="decimal-pad"
+              />
+              <TextField
+                label="Kilometraža pri sipanju"
+                placeholder="npr. 142350"
+                value={mileageAtFillup}
+                onChangeText={setMileageAtFillup}
+                keyboardType="number-pad"
+              />
+              <SwitchRow
+                label="Rezervoar napunjen do kraja"
+                description="Uključi ako si napunio do vrha — potrebno za tačan obračun potrošnje."
+                value={isFullTank}
+                onChange={setIsFullTank}
               />
             </>
           )}
@@ -168,13 +277,13 @@ export default function AddExpenseScreen() {
             onChangeText={setNote}
           />
           <TextField
-            label="Cena (RSD)"
+            label={isFuel ? "Ukupna cena (RSD)" : "Cena (RSD)"}
             placeholder="npr. 12500"
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={onAmountChange}
             keyboardType="decimal-pad"
           />
-          <DateField label="Datum" value={date} onChange={setDate} />
+          <DateField label="Datum" value={date} onChange={setDate} maximumDate={new Date()} />
 
           <Button title="Sačuvaj" onPress={handleSave} disabled={!canSave} loading={saving} />
         </View>

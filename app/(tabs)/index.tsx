@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TextField } from "@/components/ui/text-field";
 import { useToast } from "@/components/ui/toast";
 import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
+import { computeFuelStats, type FuelEntry } from "@/lib/fuel-stats";
 import { daysUntil, formatNumberSr, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -32,6 +33,7 @@ type Vehicle = {
   mileage: number;
   photo_url: string | null;
   avg_consumption_l100km: number | null;
+  tank_capacity_l: number | null;
 };
 
 type ReminderRow = { id: number; title: string; due_date: string };
@@ -67,13 +69,14 @@ export default function HomeScreen() {
   const [serviceTotal, setServiceTotal] = useState(0);
   const [otherTotal, setOtherTotal] = useState(0);
   const [upcoming, setUpcoming] = useState<ReminderRow[]>([]);
+  const [computedL100km, setComputedL100km] = useState<number | null>(null);
   const hasLoadedRef = useRef(false);
 
   const loadVehicleStats = useCallback(async (activeId: number) => {
     const now = new Date();
     const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    const [{ data: expenseData }, { data: reminderData }] = await Promise.all([
+    const [{ data: expenseData }, { data: reminderData }, { data: fuelData }] = await Promise.all([
       supabase
         .from("expenses")
         .select("category, amount, date")
@@ -86,6 +89,13 @@ export default function HomeScreen() {
         .eq("is_done", false)
         .order("due_date", { ascending: true })
         .limit(4),
+      supabase
+        .from("expenses")
+        .select("id, date, amount, liters, mileage_at_fillup, is_full_tank")
+        .eq("vehicle_id", activeId)
+        .eq("category", "Gorivo")
+        .not("mileage_at_fillup", "is", null)
+        .not("liters", "is", null),
     ]);
 
     let fuel = 0;
@@ -101,6 +111,7 @@ export default function HomeScreen() {
     setOtherTotal(other);
     setMonthTotal(fuel + service + other);
     setUpcoming(reminderData ?? []);
+    setComputedL100km(computeFuelStats((fuelData as FuelEntry[]) ?? [], null).avgL100km);
   }, []);
 
   useFocusEffect(
@@ -340,22 +351,35 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.section}>
-              <View style={styles.consumptionInline}>
-                <Text style={styles.consumptionValue}>
-                  {selectedVehicle.avg_consumption_l100km !== null
-                    ? selectedVehicle.avg_consumption_l100km
-                    : "—"}
-                </Text>
-                <Text style={styles.consumptionUnit}>L/100km</Text>
-                <Pressable
-                  onPress={() => openConsumptionSheet(selectedVehicle)}
-                  hitSlop={8}
-                  style={styles.consumptionEditButton}
-                >
-                  <Icon name="pencil-outline" size={15} color={Colors.accent} />
+              {computedL100km !== null ? (
+                <Pressable onPress={() => router.push({ pathname: "/fuel-consumption", params: { id: String(selectedVehicle.id) } })}>
+                  <View style={styles.consumptionInline}>
+                    <Text style={styles.consumptionValue}>{computedL100km.toFixed(1)}</Text>
+                    <Text style={styles.consumptionUnit}>L/100km</Text>
+                    <Icon name="chevron-right" size={16} color={Colors.textTertiary} style={{ marginLeft: 2 }} />
+                  </View>
+                  <Text style={styles.consumptionLabel}>Prosečna potrošnja · izračunato</Text>
                 </Pressable>
-              </View>
-              <Text style={styles.consumptionLabel}>Prosečna potrošnja</Text>
+              ) : (
+                <>
+                  <View style={styles.consumptionInline}>
+                    <Text style={styles.consumptionValue}>
+                      {selectedVehicle.avg_consumption_l100km !== null
+                        ? selectedVehicle.avg_consumption_l100km
+                        : "—"}
+                    </Text>
+                    <Text style={styles.consumptionUnit}>L/100km</Text>
+                    <Pressable
+                      onPress={() => openConsumptionSheet(selectedVehicle)}
+                      hitSlop={8}
+                      style={styles.consumptionEditButton}
+                    >
+                      <Icon name="pencil-outline" size={15} color={Colors.accent} />
+                    </Pressable>
+                  </View>
+                  <Text style={styles.consumptionLabel}>Prosečna potrošnja</Text>
+                </>
+              )}
             </View>
 
             <View style={styles.section}>

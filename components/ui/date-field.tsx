@@ -10,9 +10,10 @@ type DateFieldProps = {
   label?: string;
   value: Date;
   onChange: (date: Date) => void;
+  maximumDate?: Date;
 };
 
-export function DateField({ label, value, onChange }: DateFieldProps) {
+export function DateField({ label, value, onChange, maximumDate }: DateFieldProps) {
   const [visible, setVisible] = useState(false);
 
   function handleChange(event: DateTimePickerEvent, selected?: Date) {
@@ -36,6 +37,7 @@ export function DateField({ label, value, onChange }: DateFieldProps) {
             display={Platform.OS === "ios" ? "inline" : "default"}
             onChange={handleChange}
             themeVariant="dark"
+            maximumDate={maximumDate}
           />
           {Platform.OS === "ios" && (
             <Button title="Gotovo" variant="secondary" onPress={() => setVisible(false)} style={styles.doneButton} />

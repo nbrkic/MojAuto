@@ -251,6 +251,17 @@ export default function VehicleDetailScreen() {
 
           <View style={styles.section}>
             <Card
+              onPress={() => router.push({ pathname: "/fuel-consumption", params: { id: String(vehicleId) } })}
+              style={styles.linkCard}
+            >
+              <Icon name="gas-station" size={18} color={Colors.accent} />
+              <Text style={styles.linkText}>Potrošnja goriva</Text>
+              <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
+            </Card>
+          </View>
+
+          <View style={styles.section}>
+            <Card
               onPress={() => router.push({ pathname: "/vehicle-specs", params: { id: String(vehicleId) } })}
               style={styles.linkCard}
             >

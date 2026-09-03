@@ -75,6 +75,7 @@ function RootNavigator() {
         <Stack.Protected guard={!!session}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="vehicle/[id]" />
+          <Stack.Screen name="fuel-consumption" />
           <Stack.Screen name="add-vehicle" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-expense" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-reminder" options={{ presentation: "modal" }} />
