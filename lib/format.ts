@@ -55,6 +55,15 @@ export function formatDateNumericSr(dateStr: string): string {
   return `${day}.${month}.${date.getFullYear()}.`;
 }
 
+/** "28.08" — compact, no year, for chart axis labels. */
+export function formatDateShortSr(dateStr: string): string {
+  const date = parseDate(dateStr);
+  if (!date) return dateStr;
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}.${month}`;
+}
+
 /** Local "YYYY-MM-DD" (avoids UTC-shift bugs from toISOString()). */
 export function toDateKey(date: Date): string {
   const y = date.getFullYear();

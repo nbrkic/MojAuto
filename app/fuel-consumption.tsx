@@ -1,4 +1,5 @@
 import { BarChart } from "@/components/charts/bar-chart";
+import { LineChart } from "@/components/charts/line-chart";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
@@ -6,11 +7,11 @@ import { ReadoutStrip, type ReadoutItem } from "@/components/ui/readout-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Colors, Spacing, Typography } from "@/constants/theme";
 import { computeFuelStats, type FuelEntry } from "@/lib/fuel-stats";
-import { formatDateNumericSr, formatKm, formatNumberSr, formatRSD } from "@/lib/format";
+import { formatDateNumericSr, formatDateShortSr, formatKm, formatNumberSr, formatRSD } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -57,6 +58,18 @@ export default function FuelConsumptionScreen() {
 
   const stats = computeFuelStats(entries, tankCapacityL);
   const hasIntervals = stats.intervals.length > 0;
+
+  const trendData = useMemo(
+    () =>
+      [...stats.intervals]
+        .reverse()
+        .map((iv, index) => ({
+          key: `${iv.toDate}-${index}`,
+          label: formatDateShortSr(iv.toDate),
+          value: Math.round(iv.l100km * 10) / 10,
+        })),
+    [stats.intervals],
+  );
 
   const topReadouts: ReadoutItem[] = [
     {
@@ -147,6 +160,16 @@ export default function FuelConsumptionScreen() {
               <Text style={styles.chartUnit}>L/100km</Text>
             </Card>
           </View>
+
+          {hasIntervals && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Trend potrošnje po sipanjima</Text>
+              <Card>
+                <LineChart data={trendData} />
+                <Text style={styles.chartUnit}>L/100km</Text>
+              </Card>
+            </View>
+          )}
 
           {hasIntervals && (
             <View style={styles.section}>
