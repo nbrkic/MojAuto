@@ -206,7 +206,7 @@ export default function ExpensesScreen() {
                     centerValue={formatRSD(periodTotal)}
                   />
                   <View style={styles.legend}>
-                    {categoryTotals.slice(0, 4).map((c) => (
+                    {categoryTotals.map((c) => (
                       <View key={c.category.key} style={styles.legendRow}>
                         <View style={[styles.legendMark, { backgroundColor: c.category.color }]} />
                         <Text style={styles.legendLabel} numberOfLines={1}>{c.category.label}</Text>

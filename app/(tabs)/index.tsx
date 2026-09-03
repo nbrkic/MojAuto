@@ -395,6 +395,14 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.section}>
+              <Card onPress={() => router.push("/parking")} style={styles.linkCard}>
+                <Icon name="parking" size={18} color={Colors.accent} />
+                <Text style={styles.linkText}>Parking</Text>
+                <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
+              </Card>
+            </View>
+
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Uskoro</Text>
               {upcoming.length === 0 ? (
                 <Card>

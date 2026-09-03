@@ -82,6 +82,13 @@ export function daysUntil(dateStr: string): number {
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 
+/** "14:05" */
+export function formatTimeSr(date: Date): string {
+  const h = String(date.getHours()).padStart(2, "0");
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 export function formatKm(km: number): string {
   return `${formatNumberSr(km)} km`;
 }
