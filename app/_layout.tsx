@@ -80,6 +80,7 @@ function RootNavigator() {
           <Stack.Screen name="add-vehicle" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-expense" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-reminder" options={{ presentation: "modal" }} />
+          <Stack.Screen name="add-document" options={{ presentation: "modal" }} />
           <Stack.Screen name="vehicle-specs" options={{ presentation: "modal" }} />
           <Stack.Screen name="notification-settings" options={{ presentation: "modal" }} />
         </Stack.Protected>
