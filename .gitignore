@@ -44,3 +44,5 @@ app-example
 /android
 
 .mcp.json
+
+.claude/

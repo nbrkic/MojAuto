@@ -2,6 +2,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { Colors } from "@/constants/theme";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import "@/lib/dev-warnings";
+import "@/lib/trips";
 import { setupNotifications } from "@/notifications/reminders";
 import {
   BigShouldersDisplay_600SemiBold,
@@ -79,6 +80,8 @@ function RootNavigator() {
           <Stack.Screen name="fuel-prices" />
           <Stack.Screen name="parking" />
           <Stack.Screen name="documents" />
+          <Stack.Screen name="putovanja" />
+          <Stack.Screen name="trip/[id]" />
           <Stack.Screen name="add-parking-shortcut" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-vehicle" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-expense" options={{ presentation: "modal" }} />

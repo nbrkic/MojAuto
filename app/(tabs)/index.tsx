@@ -411,6 +411,14 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.section}>
+              <Card onPress={() => router.push("/putovanja")} style={styles.linkCard}>
+                <Icon name="map-marker-path" size={18} color={Colors.accent} />
+                <Text style={styles.linkText}>Putovanja</Text>
+                <Icon name="chevron-right" size={20} color={Colors.textTertiary} />
+              </Card>
+            </View>
+
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Uskoro</Text>
               {upcoming.length === 0 ? (
                 <Card>
