@@ -78,6 +78,7 @@ function RootNavigator() {
           <Stack.Screen name="fuel-consumption" />
           <Stack.Screen name="fuel-prices" />
           <Stack.Screen name="parking" />
+          <Stack.Screen name="documents" />
           <Stack.Screen name="add-parking-shortcut" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-vehicle" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-expense" options={{ presentation: "modal" }} />

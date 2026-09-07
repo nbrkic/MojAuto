@@ -89,19 +89,23 @@ export default function DocumentsScreen() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + Spacing.lg, paddingBottom: 120 }}>
         <View style={styles.header}>
+          <Pressable onPress={() => router.back()} hitSlop={8} style={styles.backButton}>
+            <Icon name="chevron-left" size={26} color={Colors.textPrimary} />
+          </Pressable>
           <Text style={styles.title}>Dokumenti</Text>
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => setFilterSheetVisible(true)}
-              style={[styles.filterButton, categoryFilter && styles.filterButtonActive]}
-            >
-              <Icon name="tune-variant" size={19} color={categoryFilter ? Colors.background : Colors.textSecondary} />
-            </Pressable>
-            <Pressable onPress={() => router.push("/add-document")} style={styles.addButton}>
-              <Icon name="plus" size={16} color={Colors.background} />
-              <Text style={styles.addButtonText}>Dodaj dokument</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => setFilterSheetVisible(true)}
+            style={[styles.filterButton, categoryFilter && styles.filterButtonActive]}
+          >
+            <Icon name="tune-variant" size={19} color={categoryFilter ? Colors.background : Colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.addButtonRow}>
+          <Pressable onPress={() => router.push("/add-document")} style={styles.addButton}>
+            <Icon name="plus" size={16} color={Colors.background} />
+            <Text style={styles.addButtonText}>Dodaj dokument</Text>
+          </Pressable>
         </View>
 
         {loading ? (
@@ -192,12 +196,12 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
-    justifyContent: "space-between",
     paddingHorizontal: Spacing.xl,
     marginBottom: Spacing.lg,
+    gap: Spacing.sm,
   },
-  title: { ...Typography.h1, color: Colors.textPrimary },
-  headerActions: { flexDirection: "row", gap: Spacing.sm },
+  backButton: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  title: { ...Typography.h1, color: Colors.textPrimary, flex: 1 },
   filterButton: {
     width: 40,
     height: 40,
@@ -207,6 +211,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   filterButtonActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  addButtonRow: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
   addButton: {
     flexDirection: "row",
     alignItems: "center",

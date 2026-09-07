@@ -9,7 +9,7 @@ const ROUTE_META: Record<string, { label: string; icon: IconName; activeIcon: Ic
   index: { label: "Početna", icon: "view-dashboard-outline", activeIcon: "view-dashboard" },
   expenses: { label: "Troškovi", icon: "credit-card-outline", activeIcon: "credit-card" },
   reminders: { label: "Obaveze", icon: "clipboard-check-outline", activeIcon: "clipboard-check" },
-  documents: { label: "Dokumenti", icon: "folder-outline", activeIcon: "folder" },
+  "ai-assistant": { label: "AI", icon: "robot-outline", activeIcon: "robot" },
   profile: { label: "Profil", icon: "account-circle-outline", activeIcon: "account-circle" },
 };
 

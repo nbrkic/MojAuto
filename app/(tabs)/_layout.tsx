@@ -11,7 +11,7 @@ export default function TabLayout() {
       <Tabs.Screen name="index" options={{ title: "Početna" }} />
       <Tabs.Screen name="expenses" options={{ title: "Troškovi" }} />
       <Tabs.Screen name="reminders" options={{ title: "Obaveze" }} />
-      <Tabs.Screen name="documents" options={{ title: "Dokumenti" }} />
+      <Tabs.Screen name="ai-assistant" options={{ title: "AI" }} />
       <Tabs.Screen name="profile" options={{ title: "Profil" }} />
     </Tabs>
   );
