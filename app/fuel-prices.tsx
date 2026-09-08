@@ -35,7 +35,7 @@ export default function FuelPricesScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + Spacing.md, paddingBottom: Spacing.xxxl }}
+      contentContainerStyle={{ paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + Spacing.xxxl }}
     >
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={styles.headerButton}>

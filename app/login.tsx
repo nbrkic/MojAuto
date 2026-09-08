@@ -43,7 +43,10 @@ export default function LoginScreen() {
     <KeyboardAvoidingView style={styles.container} behavior="padding">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + Spacing.xxxl }]}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + Spacing.xxxl, paddingBottom: insets.bottom + Spacing.xxxl },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.brand}>
