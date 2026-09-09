@@ -26,7 +26,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import MapView, { Polyline } from "react-native-maps";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -50,6 +50,16 @@ export default function PutovanjaScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [tripsLoading, setTripsLoading] = useState(false);
 
+  // Mirrors vehicleId for the vehicle-loading effect below, which intentionally
+  // excludes vehicleId from its deps (so it doesn't refetch every time the user
+  // switches vehicles) - reading state directly there would see a stale null
+  // forever and keep resetting the selection back to the first vehicle on every
+  // focus (e.g. returning from a trip's detail screen).
+  const vehicleIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    vehicleIdRef.current = vehicleId;
+  }, [vehicleId]);
+
   useFocusEffect(
     useCallback(() => {
       supabase
@@ -64,13 +74,12 @@ export default function PutovanjaScreen() {
           }
           const list = data ?? [];
           setVehicles(list);
-          if (vehicleId === null) {
+          if (vehicleIdRef.current === null) {
             const selectable = list.filter((v) => !v.archived);
             if (selectable.length > 0) setVehicleId(selectable[0].id);
           }
           setVehiclesLoaded(true);
         });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showToast]),
   );
 

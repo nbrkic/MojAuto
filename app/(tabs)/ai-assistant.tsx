@@ -19,7 +19,7 @@ import { formatDateShortSr } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -60,6 +60,16 @@ export default function AiAssistantScreen() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const loadedVehicleIdRef = useRef<number | null>(null);
 
+  // Mirrors vehicleId for the effect below, which intentionally excludes
+  // vehicleId from its deps (so it doesn't refetch every time the user
+  // switches vehicles) - reading state directly there would see a stale null
+  // forever and keep resetting the selection back to the first vehicle on
+  // every focus.
+  const vehicleIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    vehicleIdRef.current = vehicleId;
+  }, [vehicleId]);
+
   useFocusEffect(
     useCallback(() => {
       supabase
@@ -74,13 +84,12 @@ export default function AiAssistantScreen() {
           }
           const list = data ?? [];
           setVehicles(list);
-          if (vehicleId === null) {
+          if (vehicleIdRef.current === null) {
             const selectable = list.filter((v) => !v.archived);
             if (selectable.length > 0) setVehicleId(selectable[0].id);
           }
           setVehiclesLoaded(true);
         });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showToast]),
   );
 
